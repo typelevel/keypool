@@ -183,10 +183,7 @@ object KeyPool{
       val idleCount_ = idleCount - toDestroy.length
       (PoolMap.open(idleCount_, toKeep), toDestroy)
     }
-    /**
-     * Wait 5 Seconds
-     *
-     */
+    // Wait 5 Seconds
     def loop: F[Unit] = for {
       _ <- Timer[F].sleep(5.seconds)
       _ <- {
