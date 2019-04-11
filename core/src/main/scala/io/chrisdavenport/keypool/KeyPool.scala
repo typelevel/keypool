@@ -8,6 +8,20 @@ import scala.concurrent.duration._
 import io.chrisdavenport.keypool.internal._
 
 
+/**
+ * This pools internal guarantees are that the max number of values
+ * are in the pool at any time, not maximum number of operations.
+ * To do the latter application level bounds should be used.
+ *
+ * A background reaper thread is kept alive for the length of the key pools life.
+ *
+ * When resources are taken from the pool they are received as a [[Managed]].
+ * This [[Managed]] has a Ref to a [[Reusable]] which indicates whether or not the pool
+ * can reuse the resource.
+ *
+ * (I have a commented create function introducing this functionality here, so it
+ * may be introduced later.)
+ */
 final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
   private[keypool] val kpCreate: Key => F[Rezource],
   private[keypool] val kpDestroy: (Key, Rezource) => F[Unit],
@@ -66,7 +80,7 @@ object KeyPool{
   // } yield out
 
   /**
-   * Pool Bounded Interaction. 
+   * Pool Bounded Interaction.
    */
   def create[F[_]: Concurrent: Timer, Key, Rezource](
     kpCreate: Key => F[Rezource],
@@ -93,6 +107,8 @@ object KeyPool{
       kpVar
     )
   }
+
+  // Internal Helpers
 
   /**
    * Make a 'KeyPool' inactive and destroy all idle resources.
@@ -147,7 +163,7 @@ object KeyPool{
             // Can use span since we know everything will be ordered as the time is
             // when it is placed back into the pool.
             val (notStale, stale) = pList.toList.span(r => isNotStale(r._1))
-            val toDestroy_ : List[(Key, Rezource)] => List[(Key, Rezource)] = l => 
+            val toDestroy_ : List[(Key, Rezource)] => List[(Key, Rezource)] = l =>
             toDestroy((stale.map(t => (key -> t._2)) ++ l))
             val toKeep_ : List[(Key, PoolList[Rezource])] => List[(Key, PoolList[Rezource])] = l =>
               PoolList.fromList(notStale) match {
@@ -248,7 +264,7 @@ object KeyPool{
     for {
       optR <- Resource.liftF(kp.kpVar.modify(go))
       releasedState <- Resource.liftF(Ref[F].of[Reusable](kp.kpDefaultReuseState))
-      resource <- Resource.make(optR.fold(kp.kpCreate(k))(r => Sync[F].pure(r))){resource => 
+      resource <- Resource.make(optR.fold(kp.kpCreate(k))(r => Sync[F].pure(r))){resource =>
         for {
         reusable <- releasedState.get
         out <- reusable match {
