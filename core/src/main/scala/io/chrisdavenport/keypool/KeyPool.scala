@@ -40,47 +40,9 @@ final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
 
 object KeyPool{
 
-  // Not Solid Yet
-  // def createFullBounded[F[_]: Concurrent: Timer, Key, Rezource](
-  //   kpCreate: Key => F[Rezource],
-  //   kpDestroy: (Key, Rezource) => F[Unit],
-  //   kpDefaultReuseState: Reusable,
-  //   idleTimeAllowedInPoolNanos: Long,
-  //   kpMaxPerKey: Int,
-  //   kpMaxTotal: Int,
-  //   onReaperException: Throwable => F[Unit]
-  // ): Resource[F, KeyPool[F, Key, Rezource]] = for {
-  //   total <- Resource.liftF(Semaphore[F](kpMaxTotal.toLong))
-  //   ref <- Resource.liftF(Ref[F].of(Map.empty[Key, Semaphore[F]]))
-  //   kpCreate_ = {k: Key => 
-  //     ref.modify(m => 
-  //       (m, m.get(k).fold(
-  //         Semaphore[F](kpMaxPerKey.toLong)
-  //         .flatMap(s => 
-  //           ref.modify(m => m.get(k) match {
-  //             case Some(s) => (m, s.acquire)
-  //             case None => (m + (k -> s), s.acquire)
-  //           })
-  //         )
-  //       )(_.acquire.pure[F]))
-  //     ).flatten >> total.acquire >> kpCreate(k)
-  //   }
-  //   kpDestroy_ = {(k: Key, r: Rezource) => 
-  //     total.release >> ref.get.flatMap(m => m(k).release) >> kpDestroy(k, r)
-  //   }
-  //   out <- create(
-  //     kpCreate_,
-  //     kpDestroy_,
-  //     kpDefaultReuseState,
-  //     idleTimeAllowedInPoolNanos,
-  //     kpMaxPerKey,
-  //     kpMaxTotal,
-  //     onReaperException
-  //   )
-  // } yield out
-
   /**
    * Pool Bounded Interaction.
+   * Limits Number of Values in The Pool Not Total Using the Pools Resources.
    */
   def create[F[_]: Concurrent: Timer, Key, Rezource](
     kpCreate: Key => F[Rezource],
@@ -107,6 +69,49 @@ object KeyPool{
       kpVar
     )
   }
+
+  // Not Solid Yet
+  // def createAppBounded[F[_]: Concurrent: Timer, Key, Rezource](
+  //   kpCreate: Key => F[Rezource],
+  //   kpDestroy: (Key, Rezource) => F[Unit],
+  //   kpDefaultReuseState: Reusable,
+  //   idleTimeAllowedInPoolNanos: Long,
+  //   kpMaxPerKey: Int,
+  //   kpMaxTotal: Int,
+  //   onReaperException: Throwable => F[Unit]
+  // ): Resource[F, KeyPool[F, Key, Rezource]] = for {
+  //   total <- Resource.liftF(Semaphore[F](kpMaxTotal.toLong))
+  //   ref <- Resource.liftF(Ref[F].of(Map.empty[Key, Semaphore[F]]))
+  //   kpCreate_ = {k: Key =>
+  //     ref.modify(m =>
+  //       (m, m.get(k).fold(
+  //         Semaphore[F](kpMaxPerKey.toLong)
+  //         .flatMap(s =>
+  //           ref.modify(m => m.get(k) match {
+  //             case Some(s) => (m, s.acquire)
+  //             case None => (m + (k -> s), s.acquire)
+  //           })
+  //         )
+  //       )(_.acquire.pure[F]))
+  //     ).flatten >> total.acquire >> kpCreate(k)
+  //   }
+  //   kpDestroy_ = {(k: Key, r: Rezource) =>
+  //     total.release >> ref.get.flatMap(m => m(k).release) >> kpDestroy(k, r)
+  //   }
+  //   _ <- Resource.make(Concurrent[F].start{
+  //     def reportTotal: F[Unit] = total.count.flatMap{a => Sync[F].delay(println(s"Total Count - $a"))} >> Timer[F].sleep(1.second) >> reportTotal
+  //     reportTotal
+  //   })(_.cancel)
+  //   out <- create(
+  //     kpCreate_,
+  //     kpDestroy_,
+  //     kpDefaultReuseState,
+  //     idleTimeAllowedInPoolNanos,
+  //     kpMaxPerKey,
+  //     kpMaxTotal,
+  //     onReaperException
+  //   )
+  // } yield out
 
   // Internal Helpers
 
