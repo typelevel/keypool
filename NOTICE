@@ -1,0 +1,8 @@
+keypool
+Copyright 2019 Christopher Davenport
+Licensed under the MIT License (see LICENSE)
+
+This software contains portions of code derived from http-client
+https://github.com/snoyberg/http-client
+Copyright (c) 2013 Michael Snoyman
+Licensed under MIT (see licenses/LICENSE_http-client)
