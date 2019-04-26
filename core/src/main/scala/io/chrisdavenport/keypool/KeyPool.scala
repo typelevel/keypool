@@ -118,7 +118,7 @@ object KeyPool{
   /**
    * Make a 'KeyPool' inactive and destroy all idle resources.
    */
-  private[keypool] def destroy[F[_]: Sync, Key, Rezource](
+  private[keypool] def destroy[F[_]: MonadError[?[_], Throwable], Key, Rezource](
     kpDestroy: (Key, Rezource) => F[Unit],
     kpVar: Ref[F, PoolMap[Key, Rezource]]
   ): F[Unit] = for {
@@ -193,7 +193,7 @@ object KeyPool{
             if (m.isEmpty) (p, loop) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
               val (m_, toDestroy) = findStale(idleCount,m)
-              (m_, toDestroy.traverse_(r => destroy(r._1, r._2)))
+              (m_, toDestroy.traverse_(r => destroy(r._1, r._2).attempt.void))
             }
         }
       }.flatten
