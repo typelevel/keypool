@@ -36,6 +36,26 @@ final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
   def put(k: Key, r: Rezource): F[Unit] = KeyPool.put(this, k, r)
 
   def state: F[(Int, Map[Key, Int])] = KeyPool.state(kpVar)
+
+  def doOnCreate(f: (Key, Rezource) => F[Unit]): KeyPool[F, Key, Rezource] =
+    new KeyPool(
+      {k: Key => kpCreate(k).flatMap(v => f(k, v).attempt.void.as(v))},
+      kpDestroy,
+      kpDefaultReuseState,
+      kpMaxPerKey,
+      kpMaxTotal,
+      kpVar
+    )
+
+  def doOnDestroy(f: (Key, Rezource) => F[Unit]): KeyPool[F, Key, Rezource] =
+    new KeyPool(
+      kpCreate,
+      { (k: Key, r: Rezource) => kpDestroy(k, r) >> f(k, r).attempt.void},
+      kpDefaultReuseState,
+      kpMaxPerKey,
+      kpMaxTotal,
+      kpVar
+    )
 }
 
 object KeyPool{
