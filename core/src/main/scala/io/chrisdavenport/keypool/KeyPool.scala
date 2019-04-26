@@ -118,18 +118,18 @@ object KeyPool{
   /**
    * Make a 'KeyPool' inactive and destroy all idle resources.
    */
-  private[keypool] def destroy[F[_]: MonadError[?[_], Throwable], Key, Rezource](
+  private[keypool] def destroy[F[_]: Sync, Key, Rezource](
     kpDestroy: (Key, Rezource) => F[Unit],
     kpVar: Ref[F, PoolMap[Key, Rezource]]
   ): F[Unit] = for {
-    m <- kpVar.modify(s => (s, PoolMap.closed[Key, Rezource]))
+    m <- kpVar.getAndSet(PoolMap.closed[Key, Rezource])
     _ <- m match {
       case PoolClosed() => Applicative[F].unit
-      case PoolOpen(_, m2) => Applicative[F].unit
+      case PoolOpen(_, m2) =>
         m2.toList.traverse_{ case (k, pl) =>
           pl.toList
             .traverse_{ case (_, r) =>
-              kpDestroy(k, r)
+              kpDestroy(k, r).attempt.void
             }
         }
     }
@@ -193,7 +193,7 @@ object KeyPool{
             if (m.isEmpty) (p, loop) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
               val (m_, toDestroy) = findStale(idleCount,m)
-              (m_, toDestroy.traverse_(r => destroy(r._1, r._2).handleErrorWith(_ => Applicative[F].unit)))
+              (m_, toDestroy.traverse_(r => destroy(r._1, r._2)))
             }
         }
       }.flatten
@@ -270,8 +270,8 @@ object KeyPool{
         for {
         reusable <- releasedState.get
         out <- reusable match {
-          case Reuse => put(kp, k, resource)
-          case DontReuse => kp.kpDestroy(k, resource).handleErrorWith(_ => Sync[F].unit)
+          case Reuse => put(kp, k, resource).attempt.void
+          case DontReuse => kp.kpDestroy(k, resource).attempt.void
         }
         } yield out
       }
