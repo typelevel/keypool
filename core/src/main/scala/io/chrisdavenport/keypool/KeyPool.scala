@@ -30,13 +30,37 @@ final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
   private[keypool] val kpMaxTotal: Int,
   private[keypool] val kpVar: Ref[F, PoolMap[Key, Rezource]]
 ){
+
+  /**
+   * Take a [[Managed]] from the Pool. For the lifetime of this
+   * resource this is exclusively available to this key.
+   *
+   * At the end of the resource lifetime the state of the resource
+   * controls whether it is submitted back to the pool or removed.
+   */
   def take(k: Key): Resource[F, Managed[F, Rezource]] =
     KeyPool.take(this, k)
 
+  /**
+   * Place a Resource into the pool, following the rules for addition
+   * for this pool. The Resouce may be shutdown if the pool is already
+   * full in either perKey or maxTotal dimensions.
+   */
   def put(k: Key, r: Rezource): F[Unit] = KeyPool.put(this, k, r)
 
+  /**
+   * The current state of the pool.
+   *
+   * The left value is the total number of resources currently in
+   * the pool, and the right is a map of how many resources exist
+   * for each key.
+   */
   def state: F[(Int, Map[Key, Int])] = KeyPool.state(kpVar)
 
+  /**
+   * An action to take with the Key, Resource pair directly after it
+   * has been initially created
+   */
   def doOnCreate(f: (Key, Rezource) => F[Unit]): KeyPool[F, Key, Rezource] =
     new KeyPool(
       {k: Key => kpCreate(k).flatMap(v => f(k, v).attempt.void.as(v))},
@@ -47,10 +71,14 @@ final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
       kpVar
     )
 
+  /**
+   * An action to take with the key, resource pair directly prior to
+   * permanently destroying the resource
+   */
   def doOnDestroy(f: (Key, Rezource) => F[Unit]): KeyPool[F, Key, Rezource] =
     new KeyPool(
       kpCreate,
-      { (k: Key, r: Rezource) => kpDestroy(k, r) >> f(k, r).attempt.void},
+      { (k: Key, r: Rezource) => f(k, r).attempt.void >> kpDestroy(k, r)},
       kpDefaultReuseState,
       kpMaxPerKey,
       kpMaxTotal,
