@@ -81,7 +81,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
       }.unsafeRunSync() must_=== (1)
     }
 
-    "Used Resources Cleaned Up By Reaper" in {
+    "Used Resource Cleaned Up By Reaper" in {
       def nothing(i: Int, ref: Ref[IO, Int]): IO[Unit] = {
         val _ = i
         ref.get.void
@@ -107,6 +107,34 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
           later <- k.state.map(_._1)
         } yield (init, later)
       }.unsafeRunSync() must_=== ((1, 0))
+    }
+
+    "Used Resource Not Cleaned Up if Idle Time has not expired" in {
+      def nothing(i: Int, ref: Ref[IO, Int]): IO[Unit] = {
+        val _ = i
+        ref.get.void
+      }
+      implicit val CS = IO.contextShift(global)
+      implicit val T = IO.timer(global)
+      KeyPool.create(
+        {i: Int => Ref.of[IO, Int](i)},
+        nothing,
+        Reuse,
+        30000000000L, // 30 Seconds in Nanos,
+        1,
+        1,
+        {_: Throwable => IO.unit}
+      ).use{ k =>
+
+        val action = k.take(1)
+        .use(_ => IO.unit)
+        for {
+          _ <- action
+          init <- k.state.map(_._1)
+          _ <- Timer[IO].sleep(6.seconds)
+          later <- k.state.map(_._1)
+        } yield (init, later)
+      }.unsafeRunSync() must_=== ((1, 1))
     }
   }
 }
