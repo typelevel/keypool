@@ -26,7 +26,7 @@ val catsEffectV = "1.2.0"
 val specs2V = "4.5.1"
 
 val kindProjectorV = "0.9.10"
-val betterMonadicForV = "0.3.0-M4"
+val betterMonadicForV = "0.3.0"
 
 // General Settings
 lazy val commonSettings = Seq(
