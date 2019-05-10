@@ -22,7 +22,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         nothing,
         Reuse,
         Long.MaxValue,
-        10,
+        Function.const(10),
         10,
         {_: Throwable => IO.unit}
       ).use( k => 
@@ -45,7 +45,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         nothing,
         DontReuse,
         Long.MaxValue,
-        10,
+        Function.const(10),
         10,
         {_: Throwable => IO.unit}
       ).use( k =>
@@ -68,7 +68,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         nothing,
         Reuse,
         Long.MaxValue,
-        1,
+        Function.const(1),
         1,
         {_: Throwable => IO.unit}
       ).use{ k =>
@@ -93,7 +93,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         nothing,
         Reuse,
         0L,
-        1,
+        Function.const(1),
         1,
         {_: Throwable => IO.unit}
       ).use{ k =>
@@ -121,7 +121,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         nothing,
         Reuse,
         30000000000L, // 30 Seconds in Nanos,
-        1,
+        Function.const(1),
         1,
         {_: Throwable => IO.unit}
       ).use{ k =>

@@ -16,7 +16,7 @@ object Main extends IOApp {
         {(_: Unit, r: Ref[IO, Int]) => r.get.flatMap{i => IO(println(s"Shutdown with $i"))}},
         Reuse,
         10000000000L,
-        10,
+        Function.const(10),
         10,
         _ => IO.unit
     //     kpCreate: Key => F[Rezource],
