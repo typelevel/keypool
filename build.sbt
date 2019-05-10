@@ -2,7 +2,8 @@ import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 
 lazy val `keypool` = project.in(file("."))
   .settings(commonSettings, releaseSettings, skipOnPublishSettings)
-  .aggregate(core, docs)
+  .settings(crossScalaVersions := Nil)
+  .aggregate(core)
 
 lazy val core = project.in(file("core"))
   .settings(commonSettings, releaseSettings, mimaSettings)
@@ -25,15 +26,15 @@ val catsEffectV = "1.3.0"
 
 val specs2V = "4.5.1"
 
-val kindProjectorV = "0.9.10"
-val betterMonadicForV = "0.3.0"
+val kindProjectorV = "0.9.9"
+val betterMonadicForV = "0.3.0-M4"
 
 // General Settings
 lazy val commonSettings = Seq(
   organization := "io.chrisdavenport",
 
   scalaVersion := "2.12.8",
-  crossScalaVersions := Seq(scalaVersion.value, "2.11.12"),
+  crossScalaVersions := Seq(scalaVersion.value, "2.11.12", "2.13.0-M5"),
   scalacOptions += "-Yrangepos",
 
   scalacOptions in (Compile, doc) ++= Seq(
@@ -176,6 +177,7 @@ lazy val mimaSettings = {
 lazy val micrositeSettings = {
   import microsites._
   Seq(
+    crossScalaVersions := List(scalaVersion.value),
     micrositeName := "keypool",
     micrositeDescription := "A Keyed Pool for Scala",
     micrositeAuthor := "Christopher Davenport",
