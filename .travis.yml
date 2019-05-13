@@ -1,30 +1,58 @@
+dist: xenial
 sudo: false
 language: scala
 
-scala:
-  - 2.12.8
-  - 2.11.12
+scala_version_211: &scala_version_211 2.11.12
+scala_version_212: &scala_version_212 2.12.8
+scala_version_213: &scala_version_213 2.13.0-M5
 
 jdk:
-  - openjdk11
+  - openjdk8
 
-before_install:
-  - export PATH=${PATH}:./vendor/bundle
+stages:
+  - name: test
+  - name: publish
+    if: (branch = master AND type = push)
 
-install:
-  - rvm use 2.6.0 --install --fuzzy
-  - gem update --system
-  - gem install sass
-  - gem install jekyll -v 3.2.1
+jobs:
+  include:
+    - &tests
+      env: TEST="test"
+      script:
+        - sbt ++$TRAVIS_SCALA_VERSION test
+        - sbt ++$TRAVIS_SCALA_VERSION mimaReportBinaryIssues
+      scala: *scala_version_211
+    - <<: *tests
+      scala: *scala_version_212
+    - <<: *tests
+      scala: *scala_version_213
 
-script:
-  - sbt ++$TRAVIS_SCALA_VERSION test
-  - sbt ++$TRAVIS_SCALA_VERSION mimaReportBinaryIssues
-  - sbt ++$TRAVIS_SCALA_VERSION docs/makeMicrosite
+    - env: TEST="docs"
+      before_install:
+        - export PATH=${PATH}:./vendor/bundle
+      install:
+        - rvm use 2.6.0 --install --fuzzy
+        - gem update --system
+        - gem install sass
+        - gem install jekyll -v 3.2.1
+      script: sbt ++$TRAVIS_SCALA_VERSION docs/makeMicrosite
+      scala: *scala_version_212
 
-after_success:
-  - test $TRAVIS_PULL_REQUEST == "false" && test $TRAVIS_BRANCH == "master" && test $TRAVIS_REPO_SLUG == "ChristopherDavenport/keypool" && sbt ++$TRAVIS_SCALA_VERSION publish
-  - test $TRAVIS_PULL_REQUEST == "false" && test $TRAVIS_BRANCH == "master" && test $TRAVIS_REPO_SLUG == "ChristopherDavenport/keypool" && test $TRAVIS_SCALA_VERSION == "2.12.8" && sbt docs/publishMicrosite
+    - &publish
+      stage: publish
+      env: TEST="publish"
+      scala: *scala_version_211
+      script:
+        - sbt ++$TRAVIS_SCALA_VERSION publish
+    - <<: *publish
+      scala: *scala_version_212
+    - <<: *publish
+      scala: *scala_version_213
+      
+    - env: TEST="publish docs"
+      scala: *scala_version_212
+      script:
+        - sbt ++$TRAVIS_SCALA_VERSION docs/publishMicrosite
 
 cache:
   directories:
