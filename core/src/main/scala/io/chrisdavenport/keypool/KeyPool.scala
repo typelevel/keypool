@@ -96,7 +96,7 @@ object KeyPool{
     kpCreate: Key => F[Rezource],
     kpDestroy: (Key, Rezource) => F[Unit],
     kpDefaultReuseState: Reusable,
-    idleTimeAllowedInPoolNanos: Long,
+    idleTimeAllowedInPool: Duration,
     kpMaxPerKey: Key => Int,
     kpMaxTotal: Int,
     onReaperException: Throwable => F[Unit]
@@ -107,7 +107,13 @@ object KeyPool{
       kpVar <- Resource.make(
         Ref[F].of[PoolMap[Key, Rezource]](PoolMap.open(0, Map.empty[Key, PoolList[Rezource]]))
       )(kpVar => destroy(kpDestroy, kpVar))
-      _ <- Resource.make(Concurrent[F].start(keepRunning(reap(kpDestroy, idleTimeAllowedInPoolNanos, kpVar))))(_.cancel)
+      _ <- idleTimeAllowedInPool match {
+        case fd: FiniteDuration =>
+          val nanos = math.max(0L, fd.toNanos)
+          Resource.make(Concurrent[F].start(keepRunning(reap(kpDestroy, nanos, kpVar, onReaperException))))(_.cancel)
+        case _ =>
+          Applicative[Resource[F, ?]].unit
+      }
     } yield new KeyPool(
       kpCreate,
       kpDestroy,
@@ -189,16 +195,16 @@ object KeyPool{
    * stop running once our pool switches to PoolClosed.
    *
    */
-  private[keypool] def reap[F[_]: Concurrent: Timer, Key, Rezource](
+  private[keypool] def reap[F[_], Key, Rezource](
     destroy: (Key, Rezource) => F[Unit],
-    idleTimeAllowedInPool: Long,
-    kpVar: Ref[F, PoolMap[Key, Rezource]]
-  ): F[Unit] = {
+    idleTimeAllowedInPoolNanos: Long,
+    kpVar: Ref[F, PoolMap[Key, Rezource]],
+    onReaperException: Throwable => F[Unit]
+  )(implicit F: Concurrent[F], timer: Timer[F]): F[Unit] = {
     // We are going to do non-referentially tranpsarent things as we may be waiting for our modification to go through
     // which may change the state depending on when the modification block is running atomically at the moment
-    def findStale(idleCount: Int, m: Map[Key, PoolList[Rezource]]): (PoolMap[Key, Rezource], List[(Key, Rezource)]) = {
-      val now = System.nanoTime
-      val isNotStale: Long => Boolean = time => time + idleTimeAllowedInPool >= now // Time value is alright inside the KeyPool in nanos.
+    def findStale(now: Long, idleCount: Int, m: Map[Key, PoolList[Rezource]]): (PoolMap[Key, Rezource], List[(Key, Rezource)]) = {
+      val isNotStale: Long => Boolean = time => time + idleTimeAllowedInPoolNanos >= now // Time value is alright inside the KeyPool in nanos.
 
       // Probably a more idiomatic way to do this in scala
       //([(key, PoolList resource)] -> [(key, PoolList resource)]) ->
@@ -231,20 +237,29 @@ object KeyPool{
       val idleCount_ = idleCount - toDestroy.length
       (PoolMap.open(idleCount_, toKeep), toDestroy)
     }
+
+    val sleep = Timer[F].sleep(5.seconds).void
+
     // Wait 5 Seconds
     def loop: F[Unit] = for {
-      _ <- Timer[F].sleep(5.seconds)
+      now <- Timer[F].clock.monotonic(NANOSECONDS)
       _ <- {
-        kpVar.modify{
-          case p@PoolClosed() => (p, Applicative[F].pure(()))
+        kpVar.tryModify {
+          case p@PoolClosed() => (p, F.unit)
           case p@PoolOpen(idleCount, m) =>
-            if (m.isEmpty) (p, loop) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
+            if (m.isEmpty) (p, F.unit) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
-              val (m_, toDestroy) = findStale(idleCount,m)
-              (m_, toDestroy.traverse_(r => destroy(r._1, r._2).attempt.void))
+              val (m_, toDestroy) = findStale(now, idleCount,m)
+              (m_, toDestroy.traverse_(r => destroy(r._1, r._2)).attempt.flatMap {
+                case Left(t) => onReaperException(t).handleErrorWith(t => F.delay(t.printStackTrace()))
+                case Right(()) => F.unit
+              })
             }
         }
-      }.flatten
+      }.flatMap {
+        case Some(act) => act >> sleep >> loop
+        case None => loop
+      }
     } yield ()
 
     loop

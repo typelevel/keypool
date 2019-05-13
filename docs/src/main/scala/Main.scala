@@ -15,7 +15,7 @@ object Main extends IOApp {
         {_: Unit => Ref[IO].of(0)},
         {(_: Unit, r: Ref[IO, Int]) => r.get.flatMap{i => IO(println(s"Shutdown with $i"))}},
         Reuse,
-        10000000000L,
+        1.day,
         Function.const(10),
         10,
         _ => IO.unit
