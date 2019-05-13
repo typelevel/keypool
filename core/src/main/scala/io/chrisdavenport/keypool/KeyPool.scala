@@ -27,7 +27,7 @@ final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
   private[keypool] val kpCreate: Key => F[Rezource],
   private[keypool] val kpDestroy: (Key, Rezource) => F[Unit],
   private[keypool] val kpDefaultReuseState: Reusable,
-  private[keypool] val kpMaxPerKey: Int,
+  private[keypool] val kpMaxPerKey: Key => Int,
   private[keypool] val kpMaxTotal: Int,
   private[keypool] val kpVar: Ref[F, PoolMap[Key, Rezource]]
 ){
@@ -98,7 +98,7 @@ object KeyPool{
     kpDestroy: (Key, Rezource) => F[Unit],
     kpDefaultReuseState: Reusable,
     idleTimeAllowedInPool: Duration,
-    kpMaxPerKey: Int,
+    kpMaxPerKey: Key => Int,
     kpMaxTotal: Int,
     onReaperException: Throwable => F[Unit]
   ): Resource[F, KeyPool[F, Key, Rezource]] = {
@@ -288,7 +288,7 @@ object KeyPool{
             val m_ = PoolMap.open(cnt_, m + (k -> One(r, now)))
             (m_, Applicative[F].pure(()))
           case Some(l) =>
-            val (l_, mx) = addToList(now, kp.kpMaxPerKey, r, l)
+            val (l_, mx) = addToList(now, kp.kpMaxPerKey(k), r, l)
             val cnt_ = idleCount + mx.fold(1)(_ => 0)
             val m_ = PoolMap.open(cnt_, m + (k -> l_))
             (m_, mx.fold(Applicative[F].unit)(r => kp.kpDestroy(k, r)))
