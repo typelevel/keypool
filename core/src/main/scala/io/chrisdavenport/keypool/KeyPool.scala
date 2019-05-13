@@ -108,8 +108,13 @@ object KeyPool{
       kpVar <- Resource.make(
         Ref[F].of[PoolMap[Key, Rezource]](PoolMap.open(0, Map.empty[Key, PoolList[Rezource]]))
       )(kpVar => destroy(kpDestroy, kpVar))
-      idleNanos = if (idleTimeAllowedInPool.isFinite) math.max(0L, idleTimeAllowedInPool.toNanos) else Long.MaxValue
-      _ <- Resource.make(Concurrent[F].start(keepRunning(reap(kpDestroy, idleNanos, kpVar))))(_.cancel)
+      _ <- idleTimeAllowedInPool match {
+        case fd: FiniteDuration =>
+          val nanos = math.max(0L, fd.toNanos)
+          Resource.make(Concurrent[F].start(keepRunning(reap(kpDestroy, nanos, kpVar))))(_.cancel)
+        case _ =>
+          Applicative[Resource[F, ?]].unit
+      }
     } yield new KeyPool(
       kpCreate,
       kpDestroy,
