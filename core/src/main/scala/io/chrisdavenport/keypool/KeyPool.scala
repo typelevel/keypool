@@ -1,7 +1,8 @@
 package io.chrisdavenport.keypool
 
 import cats._
-import cats.implicits._
+import cats.
+  implicits._
 import cats.effect._
 import cats.effect.concurrent._
 import scala.concurrent.duration._
@@ -197,8 +198,7 @@ object KeyPool{
   ): F[Unit] = {
     // We are going to do non-referentially tranpsarent things as we may be waiting for our modification to go through
     // which may change the state depending on when the modification block is running atomically at the moment
-    def findStale(idleCount: Int, m: Map[Key, PoolList[Rezource]]): (PoolMap[Key, Rezource], List[(Key, Rezource)]) = {
-      val now = System.nanoTime
+    def findStale(now: Long, idleCount: Int, m: Map[Key, PoolList[Rezource]]): (PoolMap[Key, Rezource], List[(Key, Rezource)]) = {
       val isNotStale: Long => Boolean = time => time + idleTimeAllowedInPoolNanos >= now // Time value is alright inside the KeyPool in nanos.
 
       // Probably a more idiomatic way to do this in scala
@@ -235,13 +235,14 @@ object KeyPool{
     // Wait 5 Seconds
     def loop: F[Unit] = for {
       _ <- Timer[F].sleep(5.seconds)
+      now <- Timer[F].clock.monotonic(NANOSECONDS)
       _ <- {
         kpVar.modify{
           case p@PoolClosed() => (p, Applicative[F].pure(()))
           case p@PoolOpen(idleCount, m) =>
             if (m.isEmpty) (p, loop) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
-              val (m_, toDestroy) = findStale(idleCount,m)
+              val (m_, toDestroy) = findStale(now, idleCount,m)
               (m_, toDestroy.traverse_(r => destroy(r._1, r._2).attempt.void))
             }
         }
