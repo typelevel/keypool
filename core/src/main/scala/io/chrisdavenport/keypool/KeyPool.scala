@@ -1,8 +1,7 @@
 package io.chrisdavenport.keypool
 
 import cats._
-import cats.
-  implicits._
+import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
 import scala.concurrent.duration._
@@ -111,7 +110,7 @@ object KeyPool{
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = math.max(0L, fd.toNanos)
-          Resource.make(Concurrent[F].start(keepRunning(reap(kpDestroy, nanos, kpVar))))(_.cancel)
+          Resource.make(Concurrent[F].start(keepRunning(reap(kpDestroy, nanos, kpVar, onReaperException))))(_.cancel)
         case _ =>
           Applicative[Resource[F, ?]].unit
       }
@@ -196,11 +195,12 @@ object KeyPool{
    * stop running once our pool switches to PoolClosed.
    *
    */
-  private[keypool] def reap[F[_]: Concurrent: Timer, Key, Rezource](
+  private[keypool] def reap[F[_], Key, Rezource](
     destroy: (Key, Rezource) => F[Unit],
     idleTimeAllowedInPoolNanos: Long,
-    kpVar: Ref[F, PoolMap[Key, Rezource]]
-  ): F[Unit] = {
+    kpVar: Ref[F, PoolMap[Key, Rezource]],
+    onReaperException: Throwable => F[Unit]
+  )(implicit F: Concurrent[F], timer: Timer[F]): F[Unit] = {
     // We are going to do non-referentially tranpsarent things as we may be waiting for our modification to go through
     // which may change the state depending on when the modification block is running atomically at the moment
     def findStale(now: Long, idleCount: Int, m: Map[Key, PoolList[Rezource]]): (PoolMap[Key, Rezource], List[(Key, Rezource)]) = {
@@ -245,12 +245,12 @@ object KeyPool{
       now <- Timer[F].clock.monotonic(NANOSECONDS)
       _ <- {
         kpVar.tryModify {
-          case p@PoolClosed() => (p, Applicative[F].unit)
+          case p@PoolClosed() => (p, F.unit)
           case p@PoolOpen(idleCount, m) =>
-            if (m.isEmpty) (p, Applicative[F].unit) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
+            if (m.isEmpty) (p, F.unit) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
               val (m_, toDestroy) = findStale(now, idleCount,m)
-              (m_, toDestroy.traverse_(r => destroy(r._1, r._2)))
+              (m_, toDestroy.traverse_(r => destroy(r._1, r._2)).handleErrorWith(onReaperException))
             }
         }
       }.flatMap {
