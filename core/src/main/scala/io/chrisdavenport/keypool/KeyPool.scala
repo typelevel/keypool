@@ -232,21 +232,26 @@ object KeyPool{
       val idleCount_ = idleCount - toDestroy.length
       (PoolMap.open(idleCount_, toKeep), toDestroy)
     }
+
+    val sleep = Timer[F].sleep(5.seconds).void
+
     // Wait 5 Seconds
     def loop: F[Unit] = for {
-      _ <- Timer[F].sleep(5.seconds)
       now <- Timer[F].clock.monotonic(NANOSECONDS)
       _ <- {
-        kpVar.modify{
+        kpVar.tryModify {
           case p@PoolClosed() => (p, Applicative[F].unit)
           case p@PoolOpen(idleCount, m) =>
-            if (m.isEmpty) (p, loop) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
+            if (m.isEmpty) (p, Applicative[F].unit) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
               val (m_, toDestroy) = findStale(now, idleCount,m)
-              (m_, toDestroy.traverse_(r => destroy(r._1, r._2).attempt.void))
+              (m_, toDestroy.traverse_(r => destroy(r._1, r._2))
             }
         }
-      }.flatten
+      }.flatMap {
+        case Some(act) => act >> sleep >> loop
+        case None => loop
+      }
     } yield ()
 
     loop
