@@ -250,7 +250,10 @@ object KeyPool{
             if (m.isEmpty) (p, F.unit) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
               val (m_, toDestroy) = findStale(now, idleCount,m)
-              (m_, toDestroy.traverse_(r => destroy(r._1, r._2)).handleErrorWith(onReaperException))
+              (m_, toDestroy.traverse_(r => destroy(r._1, r._2)).attempt.flatMap {
+                case Left(t) => onReaperException(t).handleErrorWith(t => F.delay(t.printStackTrace()))
+                case Right(()) => F.unit
+              })
             }
         }
       }.flatMap {
