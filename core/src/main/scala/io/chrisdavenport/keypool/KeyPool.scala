@@ -238,7 +238,7 @@ object KeyPool{
       now <- Timer[F].clock.monotonic(NANOSECONDS)
       _ <- {
         kpVar.modify{
-          case p@PoolClosed() => (p, Applicative[F].pure(()))
+          case p@PoolClosed() => (p, Applicative[F].unit)
           case p@PoolOpen(idleCount, m) =>
             if (m.isEmpty) (p, loop) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
