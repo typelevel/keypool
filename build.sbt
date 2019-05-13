@@ -162,6 +162,7 @@ lazy val mimaSettings = {
     mimaFailOnProblem := mimaVersions(version.value).toList.headOption.isDefined,
     mimaPreviousArtifacts := (mimaVersions(version.value) ++ extraVersions)
       .filterNot(excludedVersions.contains(_))
+      .filterNot(Function.const(scalaVersion.value == "2.13.0-M5"))
       .map{v => 
         val moduleN = moduleName.value + "_" + scalaBinaryVersion.value.toString
         organization.value % moduleN % v
