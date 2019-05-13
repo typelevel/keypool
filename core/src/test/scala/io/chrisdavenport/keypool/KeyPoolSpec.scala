@@ -21,7 +21,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         {i: Int => Ref.of[IO, Int](i)},
         nothing,
         Reuse,
-        Long.MaxValue,
+        Duration.Inf,
         10,
         10,
         {_: Throwable => IO.unit}
@@ -44,7 +44,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         {i: Int => Ref.of[IO, Int](i)},
         nothing,
         DontReuse,
-        Long.MaxValue,
+        Duration.Inf,
         10,
         10,
         {_: Throwable => IO.unit}
@@ -67,7 +67,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         {i: Int => Ref.of[IO, Int](i)},
         nothing,
         Reuse,
-        Long.MaxValue,
+        Duration.Inf,
         1,
         1,
         {_: Throwable => IO.unit}
@@ -92,7 +92,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         {i: Int => Ref.of[IO, Int](i)},
         nothing,
         Reuse,
-        0L,
+        Duration.Zero,
         1,
         1,
         {_: Throwable => IO.unit}
@@ -120,7 +120,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         {i: Int => Ref.of[IO, Int](i)},
         nothing,
         Reuse,
-        30000000000L, // 30 Seconds in Nanos,
+        30.seconds,
         1,
         1,
         {_: Throwable => IO.unit}
