@@ -245,7 +245,7 @@ object KeyPool{
             if (m.isEmpty) (p, Applicative[F].unit) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
               val (m_, toDestroy) = findStale(now, idleCount,m)
-              (m_, toDestroy.traverse_(r => destroy(r._1, r._2))
+              (m_, toDestroy.traverse_(r => destroy(r._1, r._2)))
             }
         }
       }.flatMap {
