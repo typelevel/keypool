@@ -11,22 +11,15 @@ object Main extends IOApp {
   def run(args: List[String]): IO[ExitCode] = {
     // for {
       // KeyPool.createFullBounded(
-        KeyPool.create(
-        {_: Unit => Ref[IO].of(0)},
-        {(_: Unit, r: Ref[IO, Int]) => r.get.flatMap{i => IO(println(s"Shutdown with $i"))}},
-        Reuse,
-        1.day,
-        Function.const(10),
-        10,
-        _ => IO.unit
-    //     kpCreate: Key => F[Rezource],
-    // kpDestroy: (Key, Rezource) => F[Unit],
-    // kpDefaultReuseState: Reusable,
-    // idleTimeAllowedInPoolNanos: Long,
-    // kpMaxPerKey: Int,
-    // kpMaxTotal: Int,
-    // onReaperException: Throwable => F[Unit]
-      ).use{kp =>
+        KeyPoolBuilder(
+          {_: Unit => Ref[IO].of(0)},
+          {r: Ref[IO, Int] => r.get.flatMap{i => IO(println(s"Shutdown with $i"))}}
+        ).withDefaultReuseState(Reusable.Reuse)
+          .withIdleTimeAllowedInPool(1.day)
+          .withMaxPerKey(Function.const(10)(_))
+          .withMaxTotal(10)
+          .build
+        .use{kp =>
         // Deferred[IO, Unit].flatMap{d => 
           kp.take(()).use(_ => IO.unit) >> {
             def action : IO[Unit] = kp.state.flatMap{s => IO(println(s"State $s")) >> {
