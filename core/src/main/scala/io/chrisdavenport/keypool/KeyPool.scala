@@ -54,12 +54,12 @@ object KeyPool {
     private[keypool] val kpVar: Ref[F, PoolMap[A, B]]
   ) extends KeyPool[F, A, B] {
 
+    def take(k: A): Resource[F, Managed[F, B]] =
+      KeyPool.take(this, k)
 
-  def take(k: A): Resource[F, Managed[F, B]] =
-    KeyPool.take(this, k)
-
-  def state: F[(Int, Map[A, Int])] = KeyPool.state(kpVar)
-}
+    def state: F[(Int, Map[A, Int])] = 
+      KeyPool.state(kpVar)
+  }
 
   //
   // Instances
