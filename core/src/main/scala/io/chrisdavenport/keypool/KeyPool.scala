@@ -19,18 +19,9 @@ import io.chrisdavenport.keypool.internal._
  * This [[Managed]] has a Ref to a [[Reusable]] which indicates whether or not the pool
  * can reuse the resource.
  *
- * (I have a commented create function introducing this functionality here, so it
- * may be introduced later.)
  */
-final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
-  private[keypool] val kpCreate: Key => F[Rezource],
-  private[keypool] val kpDestroy: (Key, Rezource) => F[Unit],
-  private[keypool] val kpDefaultReuseState: Reusable,
-  private[keypool] val kpMaxPerKey: Key => Int,
-  private[keypool] val kpMaxTotal: Int,
-  private[keypool] val kpVar: Ref[F, PoolMap[Key, Rezource]]
-){
 
+trait KeyPool[F[_], A, B]{
   /**
    * Take a [[Managed]] from the Pool. For the lifetime of this
    * resource this is exclusively available to this key.
@@ -38,16 +29,7 @@ final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
    * At the end of the resource lifetime the state of the resource
    * controls whether it is submitted back to the pool or removed.
    */
-  def take(k: Key): Resource[F, Managed[F, Rezource]] =
-    KeyPool.take(this, k)
-
-  //
-  //  Place a Resource into the pool, following the rules for addition
-  //  for this pool. The Resouce may be shutdown if the pool is already
-  //  full in either perKey or maxTotal dimensions.
-  //
-  // I think this interface makes us have a lot of problems. So I'm removing it.
-  // def put(k: Key, r: Rezource): F[Unit] = KeyPool.put(this, k, r)
+  def take(k: A): Resource[F, Managed[F, B]]
 
   /**
    * The current state of the pool.
@@ -56,60 +38,73 @@ final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
    * the pool, and the right is a map of how many resources exist
    * for each key.
    */
-  def state: F[(Int, Map[Key, Int])] = KeyPool.state(kpVar)
-
-  /**
-   * An action to take with the Key, Resource pair directly after it
-   * has been initially created
-   */
-  def doOnCreate(f: (Key, Rezource) => F[Unit]): KeyPool[F, Key, Rezource] =
-    new KeyPool(
-      {k: Key => kpCreate(k).flatMap(v => f(k, v).attempt.void.as(v))},
-      kpDestroy,
-      kpDefaultReuseState,
-      kpMaxPerKey,
-      kpMaxTotal,
-      kpVar
-    )
-
-  /**
-   * An action to take with the key, resource pair directly prior to
-   * permanently destroying the resource
-   */
-  def doOnDestroy(f: (Key, Rezource) => F[Unit]): KeyPool[F, Key, Rezource] =
-    new KeyPool(
-      kpCreate,
-      { (k: Key, r: Rezource) => f(k, r).attempt.void >> kpDestroy(k, r)},
-      kpDefaultReuseState,
-      kpMaxPerKey,
-      kpMaxTotal,
-      kpVar
-    )
+  def state: F[(Int, Map[A, Int])]
 }
 
-object KeyPool{
-  
+
+
+object KeyPool {
+
+  private[keypool] final class KeyPoolConcrete[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
+    private[keypool] val kpCreate: Key => F[Rezource],
+    private[keypool] val kpDestroy: Rezource => F[Unit],
+    private[keypool] val kpDefaultReuseState: Reusable,
+    private[keypool] val kpMaxPerKey: Key => Int,
+    private[keypool] val kpMaxTotal: Int,
+    private[keypool] val kpVar: Ref[F, PoolMap[Key, Rezource]]
+  ) extends KeyPool[F, Key, Rezource] {
+
+
+  def take(k: Key): Resource[F, Managed[F, Rezource]] =
+    KeyPool.take(this, k)
+
+  def state: F[(Int, Map[Key, Int])] = KeyPool.state(kpVar)
+}
+
+  //
+  // Instances
+  //
+  implicit def keypoolFunctor[F[_]: Applicative, Z] = new Functor[KeyPool[F, Z, ?]]{
+    override def map[A, B](fa: KeyPool[F,Z,A])(f: A => B): KeyPool[F,Z,B] = new KeyPool[F, Z, B] {
+      def take(k: Z): Resource[F, Managed[F, B]] = 
+        fa.take(k).map(_.map(f))
+      def state: F[(Int, Map[Z, Int])] = fa.state
+    }
+  }
+
+  // Instance Is an AlleyCat Due to Map Functor instance
+  // Must Explicitly Import
+  def keypoolInvariant[F[_]: Functor, Z] = new Invariant[KeyPool[F, ?, Z]]{
+    override def imap[A, B](fa: KeyPool[F,A,Z])(f: A => B)(g: B => A): KeyPool[F,B,Z] = 
+      new KeyPool[F, B, Z] {
+        def take(k: B): Resource[F, Managed[F, Z]] = 
+          fa.take(g(k))
+        def state: F[(Int, Map[B, Int])] = fa.state.map{ case (total, m) => 
+          (total, m.map{ case (a, i) => (f(a), i)})
+        }
+      }
+  }
+
   // Internal Helpers
 
   /**
    * Make a 'KeyPool' inactive and destroy all idle resources.
    */
   private[keypool] def destroy[F[_]: MonadError[?[_], Throwable], Key, Rezource](
-    kpDestroy: (Key, Rezource) => F[Unit],
+    kpDestroy: Rezource => F[Unit],
     kpVar: Ref[F, PoolMap[Key, Rezource]]
   ): F[Unit] = for {
     m <- kpVar.getAndSet(PoolMap.closed[Key, Rezource])
     _ <- m match {
       case PoolClosed() => Applicative[F].unit
       case PoolOpen(_, m2) =>
-        m2.toList.traverse_{ case (k, pl) =>
+        m2.toList.traverse_{ case (_, pl) =>
           pl.toList
             .traverse_{ case (_, r) =>
-              kpDestroy(k, r).attempt.void
+              kpDestroy(r).attempt.void
             }
         }
     }
-      //m.traverse_{ r: Rezource => kpDestroy(r).handleErrorWith(_ => Applicative[F].unit)}
   } yield ()
 
   /**
@@ -118,7 +113,7 @@ object KeyPool{
    *
    */
   private[keypool] def reap[F[_], Key, Rezource](
-    destroy: (Key, Rezource) => F[Unit],
+    destroy: Rezource => F[Unit],
     idleTimeAllowedInPoolNanos: Long,
     kpVar: Ref[F, PoolMap[Key, Rezource]],
     onReaperException: Throwable => F[Unit]
@@ -172,7 +167,7 @@ object KeyPool{
             if (m.isEmpty) (p, F.unit) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
               val (m_, toDestroy) = findStale(now, idleCount,m)
-              (m_, toDestroy.traverse_(r => destroy(r._1, r._2)).attempt.flatMap {
+              (m_, toDestroy.traverse_(r => destroy(r._2)).attempt.flatMap {
                 case Left(t) => onReaperException(t).handleErrorWith(t => F.delay(t.printStackTrace()))
                 case Right(()) => F.unit
               })
@@ -202,7 +197,7 @@ object KeyPool{
       }
     )
 
-  private[keypool] def put[F[_]: Sync: Clock, Key, Rezource](kp: KeyPool[F, Key, Rezource], k: Key, r: Rezource): F[Unit] = {
+  private[keypool] def put[F[_]: Sync: Clock, Key, Rezource](kp: KeyPoolConcrete[F, Key, Rezource], k: Key, r: Rezource): F[Unit] = {
     def addToList[A](now: Long, maxCount: Int, x: A, l: PoolList[A]): (PoolList[A], Option[A]) =
       if (maxCount <= 1) (l, Some(x))
       else {
@@ -214,9 +209,9 @@ object KeyPool{
         }
       }
     def go(now: Long, pc: PoolMap[Key, Rezource]): (PoolMap[Key, Rezource], F[Unit]) = pc match {
-      case p@PoolClosed() => (p, kp.kpDestroy(k, r))
+      case p@PoolClosed() => (p, kp.kpDestroy(r))
       case p@PoolOpen(idleCount, m) =>
-        if (idleCount > kp.kpMaxTotal) (p, kp.kpDestroy(k, r))
+        if (idleCount > kp.kpMaxTotal) (p, kp.kpDestroy(r))
         else m.get(k) match {
           case None =>
             val cnt_ = idleCount + 1
@@ -226,7 +221,7 @@ object KeyPool{
             val (l_, mx) = addToList(now, kp.kpMaxPerKey(k), r, l)
             val cnt_ = idleCount + mx.fold(1)(_ => 0)
             val m_ = PoolMap.open(cnt_, m + (k -> l_))
-            (m_, mx.fold(Applicative[F].unit)(r => kp.kpDestroy(k, r)))
+            (m_, mx.fold(Applicative[F].unit)(r => kp.kpDestroy(r)))
         }
     }
 
@@ -235,7 +230,7 @@ object KeyPool{
     }
   }
 
-  private[keypool] def take[F[_]: Sync: Clock, Key, Rezource](kp: KeyPool[F, Key, Rezource], k: Key): Resource[F, Managed[F, Rezource]] = {
+  private[keypool] def take[F[_]: Sync: Clock, Key, Rezource](kp: KeyPoolConcrete[F, Key, Rezource], k: Key): Resource[F, Managed[F, Rezource]] = {
     def go(pm: PoolMap[Key, Rezource]): (PoolMap[Key, Rezource], Option[Rezource]) = pm match {
       case p@PoolClosed() => (p, None)
       case pOrig@PoolOpen(idleCount, m) =>
@@ -256,7 +251,7 @@ object KeyPool{
         reusable <- releasedState.get
         out <- reusable match {
           case Reusable.Reuse => put(kp, k, resource).attempt.void
-          case Reusable.DontReuse => kp.kpDestroy(k, resource).attempt.void
+          case Reusable.DontReuse => kp.kpDestroy(resource).attempt.void
         }
         } yield out
       }

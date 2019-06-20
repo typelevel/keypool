@@ -8,17 +8,17 @@ import cats.effect.concurrent._
 import scala.concurrent.duration._
 
 final class KeyPoolBuilder[F[_]: Concurrent: Timer, Key, Rezource] private (
-  private val kpCreate: Key => F[Rezource],
-  private val kpDestroy: (Key, Rezource) => F[Unit],
-  private val kpDefaultReuseState: Reusable,
-  private val idleTimeAllowedInPool: Duration,
-  private val kpMaxPerKey: Key => Int,
-  private val kpMaxTotal: Int,
-  private val onReaperException: Throwable => F[Unit]
+  val kpCreate: Key => F[Rezource],
+  val kpDestroy: Rezource => F[Unit],
+  val kpDefaultReuseState: Reusable,
+  val idleTimeAllowedInPool: Duration,
+  val kpMaxPerKey: Key => Int,
+  val kpMaxTotal: Int,
+  val onReaperException: Throwable => F[Unit]
 ){
   private def copy(
     kpCreate: Key => F[Rezource] = this.kpCreate,
-    kpDestroy: (Key, Rezource) => F[Unit] = this.kpDestroy,
+    kpDestroy: Rezource => F[Unit] = this.kpDestroy,
     kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
     idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
     kpMaxPerKey: Key => Int = this.kpMaxPerKey,
@@ -33,6 +33,12 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, Key, Rezource] private (
     kpMaxTotal,
     onReaperException
   )
+
+  def doOnCreate(f: Rezource => F[Unit]): KeyPoolBuilder[F, Key, Rezource] =
+    copy(kpCreate = {k: Key => this.kpCreate(k).flatMap(v => f(v).attempt.void.as(v))})
+
+  def doOnDestroy(f: Rezource => F[Unit]): KeyPoolBuilder[F, Key, Rezource] =
+    copy(kpDestroy = {r: Rezource => f(r).attempt.void >> this.kpDestroy(r)})
 
   def withDefaultReuseState(defaultReuseState: Reusable) =
     copy(kpDefaultReuseState = defaultReuseState)
@@ -63,7 +69,7 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, Key, Rezource] private (
         case _ =>
           Applicative[Resource[F, ?]].unit
       }
-    } yield new KeyPool(
+    } yield new KeyPool.KeyPoolConcrete(
       kpCreate,
       kpDestroy,
       kpDefaultReuseState,
@@ -79,7 +85,7 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, Key, Rezource] private (
 object KeyPoolBuilder {
   def apply[F[_]: Concurrent: Timer, Key, Rezource](
     create: Key => F[Rezource],
-    destroy: (Key, Rezource) => F[Unit],
+    destroy: Rezource => F[Unit],
   ): KeyPoolBuilder[F, Key, Rezource] = new KeyPoolBuilder[F, Key, Rezource](
     create,
     destroy, 

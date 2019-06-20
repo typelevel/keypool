@@ -1,5 +1,6 @@
 package io.chrisdavenport.keypool
 
+import cats.Functor
 import cats.effect.concurrent.Ref
 
 /**
@@ -15,3 +16,13 @@ final class Managed[F[_], Rezource] private[keypool] (
   val isReused: Boolean,
   val canBeReused: Ref[F, Reusable]
 )
+
+object Managed {
+  implicit def managedFunctor[F[_]]: Functor[Managed[F, ?]] = new Functor[Managed[F, ?]]{
+    def map[A, B](fa: Managed[F,A])(f: A => B): Managed[F,B] = new Managed[F, B](
+      f(fa.resource),
+      fa.isReused,
+      fa.canBeReused
+    )
+  }
+}
