@@ -85,7 +85,7 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, A, B] private (
 object KeyPoolBuilder {
   def apply[F[_]: Concurrent: Timer, A, B](
     create: A => F[B],
-    destroy: B => F[Unit],
+    destroy: B => F[Unit]
   ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
     create,
     destroy, 
