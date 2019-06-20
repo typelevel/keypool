@@ -8,24 +8,23 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.global
 class KeypoolSpec extends mutable.Specification with ScalaCheck {
 
-  import _root_.io.chrisdavenport.keypool.KeyPool
   "Keypool" should {
     "Keep Resources marked to be kept" in {
-      def nothing(i: Int, ref: Ref[IO, Int]): IO[Unit] = {
-        val _ = i
+      def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
       implicit val CS = IO.contextShift(global)
       implicit val T = IO.timer(global)
-      KeyPool.create(
+      KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
-        nothing,
-        Reuse,
-        Duration.Inf,
-        Function.const(10),
-        10,
-        {_: Throwable => IO.unit}
-      ).use( k => 
+        nothing
+      ).withDefaultReuseState(Reusable.Reuse)
+        .withIdleTimeAllowedInPool(Duration.Inf)
+        .withMaxPerKey(Function.const(10))
+        .withMaxTotal(10)
+        .withOnReaperException({_: Throwable => IO.unit})
+        .build
+        .use( k => 
 
         k.take(1)
           .use(_ => IO.unit) >>
@@ -34,21 +33,21 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
     }
 
     "Delete Resources marked to be deleted" in {
-      def nothing(i: Int, ref: Ref[IO, Int]): IO[Unit] = {
-        val _ = i
+      def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
       implicit val CS = IO.contextShift(global)
       implicit val T = IO.timer(global)
-      KeyPool.create(
+      KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
-        nothing,
-        DontReuse,
-        Duration.Inf,
-        Function.const(10),
-        10,
-        {_: Throwable => IO.unit}
-      ).use( k =>
+        nothing
+      ).withDefaultReuseState(Reusable.DontReuse)
+        .withIdleTimeAllowedInPool(Duration.Inf)
+        .withMaxPerKey(Function.const(10))
+        .withMaxTotal(10)
+        .withOnReaperException({_: Throwable => IO.unit})
+        .build
+      .use( k =>
 
         k.take(1)
           .use(_ => IO.unit) >>
@@ -57,21 +56,21 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
     }
 
     "Delete Resource when pool is full" in {
-      def nothing(i: Int, ref: Ref[IO, Int]): IO[Unit] = {
-        val _ = i
+      def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
       implicit val CS = IO.contextShift(global)
       implicit val T = IO.timer(global)
-      KeyPool.create(
+      KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
-        nothing,
-        Reuse,
-        Duration.Inf,
-        Function.const(1),
-        1,
-        {_: Throwable => IO.unit}
-      ).use{ k =>
+        nothing
+      ).withDefaultReuseState(Reusable.Reuse)
+        .withIdleTimeAllowedInPool(Duration.Inf)
+        .withMaxPerKey(Function.const(1))
+        .withMaxTotal(1)
+        .withOnReaperException{_: Throwable => IO.unit}
+        .build
+        .use{ k =>
 
         val action = k.take(1)
         .use(_ => IO.unit)
@@ -82,21 +81,22 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
     }
 
     "Used Resource Cleaned Up By Reaper" in {
-      def nothing(i: Int, ref: Ref[IO, Int]): IO[Unit] = {
-        val _ = i
+      def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
       implicit val CS = IO.contextShift(global)
       implicit val T = IO.timer(global)
-      KeyPool.create(
+      KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
-        nothing,
-        Reuse,
-        Duration.Zero,
-        Function.const(1),
-        1,
-        {_: Throwable => IO.unit}
-      ).use{ k =>
+        nothing
+      ).withDefaultReuseState(Reusable.Reuse)
+        .withIdleTimeAllowedInPool(Duration.Zero)
+        .withMaxPerKey(Function.const(1))
+        .withMaxTotal(1)
+        .withOnReaperException{_: Throwable => IO.unit}
+        .build
+        .use{ k =>
+
 
         val action = k.take(1)
         .use(_ => IO.unit)
@@ -110,21 +110,22 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
     }
 
     "Used Resource Not Cleaned Up if Idle Time has not expired" in {
-      def nothing(i: Int, ref: Ref[IO, Int]): IO[Unit] = {
-        val _ = i
+      def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
       implicit val CS = IO.contextShift(global)
       implicit val T = IO.timer(global)
-      KeyPool.create(
+
+      KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
-        nothing,
-        Reuse,
-        30.seconds,
-        Function.const(1),
-        1,
-        {_: Throwable => IO.unit}
-      ).use{ k =>
+        nothing
+      ).withDefaultReuseState(Reusable.Reuse)
+        .withIdleTimeAllowedInPool(30.seconds)
+        .withMaxPerKey(Function.const(1))
+        .withMaxTotal(1)
+        .withOnReaperException{_: Throwable => IO.unit}
+        .build
+        .use{ k =>
 
         val action = k.take(1)
         .use(_ => IO.unit)
