@@ -41,12 +41,13 @@ final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
   def take(k: Key): Resource[F, Managed[F, Rezource]] =
     KeyPool.take(this, k)
 
-  /**
-   * Place a Resource into the pool, following the rules for addition
-   * for this pool. The Resouce may be shutdown if the pool is already
-   * full in either perKey or maxTotal dimensions.
-   */
-  def put(k: Key, r: Rezource): F[Unit] = KeyPool.put(this, k, r)
+  //
+  //  Place a Resource into the pool, following the rules for addition
+  //  for this pool. The Resouce may be shutdown if the pool is already
+  //  full in either perKey or maxTotal dimensions.
+  //
+  // I think this interface makes us have a lot of problems. So I'm removing it.
+  // def put(k: Key, r: Rezource): F[Unit] = KeyPool.put(this, k, r)
 
   /**
    * The current state of the pool.
@@ -87,86 +88,7 @@ final class KeyPool[F[_]: Sync: Clock, Key, Rezource] private[keypool] (
 }
 
 object KeyPool{
-
-  /**
-   * Pool Bounded Interaction.
-   * Limits Number of Values in The Pool Not Total Using the Pools Resources.
-   */
-  def create[F[_]: Concurrent: Timer, Key, Rezource](
-    kpCreate: Key => F[Rezource],
-    kpDestroy: (Key, Rezource) => F[Unit],
-    kpDefaultReuseState: Reusable,
-    idleTimeAllowedInPool: Duration,
-    kpMaxPerKey: Key => Int,
-    kpMaxTotal: Int,
-    onReaperException: Throwable => F[Unit]
-  ): Resource[F, KeyPool[F, Key, Rezource]] = {
-    def keepRunning[A](fa: F[A]): F[A] =
-      fa.onError{ case e => onReaperException(e)}.attempt >> keepRunning(fa)
-    for {
-      kpVar <- Resource.make(
-        Ref[F].of[PoolMap[Key, Rezource]](PoolMap.open(0, Map.empty[Key, PoolList[Rezource]]))
-      )(kpVar => destroy(kpDestroy, kpVar))
-      _ <- idleTimeAllowedInPool match {
-        case fd: FiniteDuration =>
-          val nanos = math.max(0L, fd.toNanos)
-          Resource.make(Concurrent[F].start(keepRunning(reap(kpDestroy, nanos, kpVar, onReaperException))))(_.cancel)
-        case _ =>
-          Applicative[Resource[F, ?]].unit
-      }
-    } yield new KeyPool(
-      kpCreate,
-      kpDestroy,
-      kpDefaultReuseState,
-      kpMaxPerKey,
-      kpMaxTotal,
-      kpVar
-    )
-  }
-
-  // Not Solid Yet
-  // def createAppBounded[F[_]: Concurrent: Timer, Key, Rezource](
-  //   kpCreate: Key => F[Rezource],
-  //   kpDestroy: (Key, Rezource) => F[Unit],
-  //   kpDefaultReuseState: Reusable,
-  //   idleTimeAllowedInPoolNanos: Long,
-  //   kpMaxPerKey: Int,
-  //   kpMaxTotal: Int,
-  //   onReaperException: Throwable => F[Unit]
-  // ): Resource[F, KeyPool[F, Key, Rezource]] = for {
-  //   total <- Resource.liftF(Semaphore[F](kpMaxTotal.toLong))
-  //   ref <- Resource.liftF(Ref[F].of(Map.empty[Key, Semaphore[F]]))
-  //   kpCreate_ = {k: Key =>
-  //     ref.modify(m =>
-  //       (m, m.get(k).fold(
-  //         Semaphore[F](kpMaxPerKey.toLong)
-  //         .flatMap(s =>
-  //           ref.modify(m => m.get(k) match {
-  //             case Some(s) => (m, s.acquire)
-  //             case None => (m + (k -> s), s.acquire)
-  //           })
-  //         )
-  //       )(_.acquire.pure[F]))
-  //     ).flatten >> total.acquire >> kpCreate(k)
-  //   }
-  //   kpDestroy_ = {(k: Key, r: Rezource) =>
-  //     total.release >> ref.get.flatMap(m => m(k).release) >> kpDestroy(k, r)
-  //   }
-  //   _ <- Resource.make(Concurrent[F].start{
-  //     def reportTotal: F[Unit] = total.count.flatMap{a => Sync[F].delay(println(s"Total Count - $a"))} >> Timer[F].sleep(1.second) >> reportTotal
-  //     reportTotal
-  //   })(_.cancel)
-  //   out <- create(
-  //     kpCreate_,
-  //     kpDestroy_,
-  //     kpDefaultReuseState,
-  //     idleTimeAllowedInPoolNanos,
-  //     kpMaxPerKey,
-  //     kpMaxTotal,
-  //     onReaperException
-  //   )
-  // } yield out
-
+  
   // Internal Helpers
 
   /**
@@ -333,8 +255,8 @@ object KeyPool{
         for {
         reusable <- releasedState.get
         out <- reusable match {
-          case Reuse => put(kp, k, resource).attempt.void
-          case DontReuse => kp.kpDestroy(k, resource).attempt.void
+          case Reusable.Reuse => put(kp, k, resource).attempt.void
+          case Reusable.DontReuse => kp.kpDestroy(k, resource).attempt.void
         }
         } yield out
       }
