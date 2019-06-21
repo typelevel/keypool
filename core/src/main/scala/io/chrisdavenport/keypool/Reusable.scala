@@ -8,5 +8,7 @@ package io.chrisdavenport.keypool
  * if it is in DontReuse the resource will be shutdown.
  */
 sealed trait Reusable
-case object Reuse extends Reusable
-case object DontReuse extends Reusable
+object Reusable {
+  case object Reuse extends Reusable
+  case object DontReuse extends Reusable
+}
