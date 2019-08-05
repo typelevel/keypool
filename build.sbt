@@ -25,7 +25,7 @@ lazy val contributors = Seq(
 val catsV = "2.0.0-M4"
 val catsEffectV = "2.0.0-M4"
 
-val specs2V = "4.6.0"
+val specs2V = "4.7.0"
 
 val kindProjectorV = "0.10.3"
 val betterMonadicForV = "0.3.1"
