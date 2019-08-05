@@ -7,7 +7,7 @@ scala_version_212: &scala_version_212 2.12.8
 scala_version_213: &scala_version_213 2.13.0
 
 jdk:
-  - openjdk8
+  - openjdk11
 
 stages:
   - name: test
