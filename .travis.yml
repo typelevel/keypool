@@ -2,8 +2,7 @@ dist: xenial
 sudo: false
 language: scala
 
-scala_version_211: &scala_version_211 2.11.12
-scala_version_212: &scala_version_212 2.12.8
+scala_version_212: &scala_version_212 2.12.9
 scala_version_213: &scala_version_213 2.13.0
 
 jdk:
@@ -21,8 +20,6 @@ jobs:
       script:
         - sbt ++$TRAVIS_SCALA_VERSION test
         - sbt ++$TRAVIS_SCALA_VERSION mimaReportBinaryIssues
-      scala: *scala_version_211
-    - <<: *tests
       scala: *scala_version_212
     - <<: *tests
       scala: *scala_version_213
@@ -41,11 +38,9 @@ jobs:
     - &publish
       stage: publish
       env: TEST="publish"
-      scala: *scala_version_211
+      scala: *scala_version_212
       script:
         - sbt ++$TRAVIS_SCALA_VERSION publish
-    - <<: *publish
-      scala: *scala_version_212
     - <<: *publish
       scala: *scala_version_213
       
