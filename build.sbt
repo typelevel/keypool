@@ -34,8 +34,8 @@ val betterMonadicForV = "0.3.1"
 lazy val commonSettings = Seq(
   organization := "io.chrisdavenport",
 
-  scalaVersion := "2.13.0",
-  crossScalaVersions := Seq(scalaVersion.value, "2.12.9"),
+  scalaVersion := "2.12.9",
+  crossScalaVersions := Seq("2.13.0", scalaVersion.value),
 
   scalacOptions in (Compile, doc) ++= Seq(
       "-groups",
