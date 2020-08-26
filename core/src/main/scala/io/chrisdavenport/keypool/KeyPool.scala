@@ -45,7 +45,7 @@ trait KeyPool[F[_], A, B]{
 
 object KeyPool {
 
-  private[keypool] final class KeyPoolConcrete[F[_]: Sync: Clock, A, B] private[keypool] (
+  private[keypool] final class KeyPoolConcrete[F[_]: Temporal[*[_], Throwable]: Ref.Mk, A, B] private[keypool] (
     private[keypool] val kpCreate: A => F[B],
     private[keypool] val kpDestroy: B => F[Unit],
     private[keypool] val kpDefaultReuseState: Reusable,
@@ -120,14 +120,14 @@ object KeyPool {
    */
   private[keypool] def reap[F[_], A, B](
     destroy: B => F[Unit],
-    idleTimeAllowedInPoolNanos: Long,
+    idleTimeAllowedInPoolNanos: FiniteDuration,
     kpVar: Ref[F, PoolMap[A, B]],
     onReaperException: Throwable => F[Unit]
-  )(implicit F: Concurrent[F], timer: Timer[F]): F[Unit] = {
+  )(implicit F: Temporal[F, Throwable]): F[Unit] = {
     // We are going to do non-referentially tranpsarent things as we may be waiting for our modification to go through
     // which may change the state depending on when the modification block is running atomically at the moment
-    def findStale(now: Long, idleCount: Int, m: Map[A, PoolList[B]]): (PoolMap[A, B], List[(A, B)]) = {
-      val isNotStale: Long => Boolean = time => time + idleTimeAllowedInPoolNanos >= now // Time value is alright inside the KeyPool in nanos.
+    def findStale(now: FiniteDuration, idleCount: Int, m: Map[A, PoolList[B]]): (PoolMap[A, B], List[(A, B)]) = {
+      val isNotStale: FiniteDuration => Boolean = time => time + idleTimeAllowedInPoolNanos >= now // Time value is alright inside the KeyPool in nanos.
 
       // Probably a more idiomatic way to do this in scala
       //([(key, PoolList resource)] -> [(key, PoolList resource)]) ->
@@ -161,11 +161,11 @@ object KeyPool {
       (PoolMap.open(idleCount_, toKeep), toDestroy)
     }
 
-    val sleep = Timer[F].sleep(5.seconds).void
+    val sleep = F.sleep(5.seconds).void
 
     // Wait 5 Seconds
     def loop: F[Unit] = for {
-      now <- Timer[F].clock.monotonic(NANOSECONDS)
+      now <- F.monotonic
       _ <- {
         kpVar.tryModify {
           case p@PoolClosed() => (p, F.unit)
@@ -174,7 +174,7 @@ object KeyPool {
             else {
               val (m_, toDestroy) = findStale(now, idleCount,m)
               (m_, toDestroy.traverse_(r => destroy(r._2)).attempt.flatMap {
-                case Left(t) => onReaperException(t).handleErrorWith(t => F.delay(t.printStackTrace()))
+                case Left(t) => onReaperException(t) // CHEATING .handleErrorWith(t => F.delay(t.printStackTrace()))
                 case Right(()) => F.unit
               })
             }
@@ -203,8 +203,8 @@ object KeyPool {
       }
     )
 
-  private[keypool] def put[F[_]: Sync: Clock, A, B](kp: KeyPoolConcrete[F, A, B], k: A, r: B): F[Unit] = {
-    def addToList[Z](now: Long, maxCount: Int, x: Z, l: PoolList[Z]): (PoolList[Z], Option[Z]) =
+  private[keypool] def put[F[_]: Temporal[*[_], Throwable], A, B](kp: KeyPoolConcrete[F, A, B], k: A, r: B): F[Unit] = {
+    def addToList[Z](now: FiniteDuration, maxCount: Int, x: Z, l: PoolList[Z]): (PoolList[Z], Option[Z]) =
       if (maxCount <= 1) (l, Some(x))
       else {
         l match {
@@ -214,7 +214,7 @@ object KeyPool {
             else (l, Some(x))
         }
       }
-    def go(now: Long, pc: PoolMap[A, B]): (PoolMap[A, B], F[Unit]) = pc match {
+    def go(now: FiniteDuration, pc: PoolMap[A, B]): (PoolMap[A, B], F[Unit]) = pc match {
       case p@PoolClosed() => (p, kp.kpDestroy(r))
       case p@PoolOpen(idleCount, m) =>
         if (idleCount > kp.kpMaxTotal) (p, kp.kpDestroy(r))
@@ -231,12 +231,12 @@ object KeyPool {
         }
     }
 
-    Clock[F].monotonic(NANOSECONDS).flatMap{ now =>
+    Clock[F].monotonic.flatMap{ now =>
       kp.kpVar.modify(pm => go(now,pm)).flatten
     }
   }
 
-  private[keypool] def take[F[_]: Sync: Clock, A, B](kp: KeyPoolConcrete[F,A, B], k: A): Resource[F, Managed[F, B]] = {
+  private[keypool] def take[F[_]: Temporal[*[_], Throwable]: Ref.Mk, A, B](kp: KeyPoolConcrete[F,A, B], k: A): Resource[F, Managed[F, B]] = {
     def go(pm: PoolMap[A, B]): (PoolMap[A, B], Option[B]) = pm match {
       case p@PoolClosed() => (p, None)
       case pOrig@PoolOpen(idleCount, m) =>
@@ -252,7 +252,7 @@ object KeyPool {
     for {
       optR <- Resource.liftF(kp.kpVar.modify(go))
       releasedState <- Resource.liftF(Ref[F].of[Reusable](kp.kpDefaultReuseState))
-      resource <- Resource.make(optR.fold(kp.kpCreate(k))(r => Sync[F].pure(r))){resource =>
+      resource <- Resource.make(optR.fold(kp.kpCreate(k))(r => Applicative[F].pure(r))){resource =>
         for {
         reusable <- releasedState.get
         out <- reusable match {

@@ -5,7 +5,9 @@ import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.global
+// import scala.concurrent.ExecutionContext.global
+import cats.effect.unsafe.implicits.global
+
 class KeypoolSpec extends mutable.Specification with ScalaCheck {
 
   "Keypool" should {
@@ -13,8 +15,8 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
       def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
-      implicit val CS = IO.contextShift(global)
-      implicit val T = IO.timer(global)
+      // implicit val CS = IO.contextShift(global)
+      // implicit val T = IO.timer(global)
       KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
         nothing
@@ -36,8 +38,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
       def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
-      implicit val CS = IO.contextShift(global)
-      implicit val T = IO.timer(global)
+
       KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
         nothing
@@ -59,8 +60,6 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
       def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
-      implicit val CS = IO.contextShift(global)
-      implicit val T = IO.timer(global)
       KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
         nothing
@@ -84,8 +83,6 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
       def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
-      implicit val CS = IO.contextShift(global)
-      implicit val T = IO.timer(global)
       KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
         nothing
@@ -103,7 +100,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         for {
           _ <- action
           init <- k.state.map(_._1)
-          _ <- Timer[IO].sleep(6.seconds)
+          _ <- Temporal[IO, Throwable].sleep(6.seconds)
           later <- k.state.map(_._1)
         } yield (init, later)
       }.unsafeRunSync() must_=== ((1, 0))
@@ -113,8 +110,6 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
       def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
-      implicit val CS = IO.contextShift(global)
-      implicit val T = IO.timer(global)
 
       KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
@@ -132,7 +127,7 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
         for {
           _ <- action
           init <- k.state.map(_._1)
-          _ <- Timer[IO].sleep(6.seconds)
+          _ <- Temporal[IO, Throwable].sleep(6.seconds)
           later <- k.state.map(_._1)
         } yield (init, later)
       }.unsafeRunSync() must_=== ((1, 1))

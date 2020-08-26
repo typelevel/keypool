@@ -7,7 +7,7 @@ import cats.effect._
 import cats.effect.concurrent._
 import scala.concurrent.duration._
 
-final class KeyPoolBuilder[F[_]: Concurrent: Timer, A, B] private (
+final class KeyPoolBuilder[F[_], A, B] private (
   val kpCreate: A => F[B],
   val kpDestroy: B => F[Unit],
   val kpDefaultReuseState: Reusable,
@@ -15,7 +15,7 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, A, B] private (
   val kpMaxPerKey: A => Int,
   val kpMaxTotal: Int,
   val onReaperException: Throwable => F[Unit]
-){
+)(implicit F: Temporal[F, Throwable], R: Ref.Mk[F]){
   private def copy(
     kpCreate: A => F[B] = this.kpCreate,
     kpDestroy: B => F[Unit] = this.kpDestroy,
@@ -65,7 +65,7 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, A, B] private (
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = math.max(0L, fd.toNanos)
-          Resource.make(Concurrent[F].start(keepRunning(KeyPool.reap(kpDestroy, nanos, kpVar, onReaperException))))(_.cancel)
+          Resource.make(Concurrent[F].start(keepRunning(KeyPool.reap(kpDestroy, nanos.nanos, kpVar, onReaperException))))(_.cancel)
         case _ =>
           Applicative[Resource[F, ?]].unit
       }
@@ -83,10 +83,10 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, A, B] private (
 }
 
 object KeyPoolBuilder {
-  def apply[F[_]: Concurrent: Timer, A, B](
+  def apply[F[_], A, B](
     create: A => F[B],
     destroy: B => F[Unit]
-  ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
+  )(implicit F: Temporal[F, Throwable], R: Ref.Mk[F]): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
     create,
     destroy, 
     Defaults.defaultReuseState,
