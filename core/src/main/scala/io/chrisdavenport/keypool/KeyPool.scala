@@ -45,7 +45,7 @@ trait KeyPool[F[_], A, B]{
 
 object KeyPool {
 
-  private[keypool] final class KeyPoolConcrete[F[_]: Temporal[*[_], Throwable]: Ref.Mk, A, B] private[keypool] (
+  private[keypool] final class KeyPoolConcrete[F[_]: TemporalThrow: Ref.Mk, A, B] private[keypool] (
     private[keypool] val kpCreate: A => F[B],
     private[keypool] val kpDestroy: B => F[Unit],
     private[keypool] val kpDefaultReuseState: Reusable,
@@ -203,7 +203,7 @@ object KeyPool {
       }
     )
 
-  private[keypool] def put[F[_]: Temporal[*[_], Throwable], A, B](kp: KeyPoolConcrete[F, A, B], k: A, r: B): F[Unit] = {
+  private[keypool] def put[F[_]: TemporalThrow, A, B](kp: KeyPoolConcrete[F, A, B], k: A, r: B): F[Unit] = {
     def addToList[Z](now: FiniteDuration, maxCount: Int, x: Z, l: PoolList[Z]): (PoolList[Z], Option[Z]) =
       if (maxCount <= 1) (l, Some(x))
       else {
@@ -236,7 +236,7 @@ object KeyPool {
     }
   }
 
-  private[keypool] def take[F[_]: Temporal[*[_], Throwable]: Ref.Mk, A, B](kp: KeyPoolConcrete[F,A, B], k: A): Resource[F, Managed[F, B]] = {
+  private[keypool] def take[F[_]: TemporalThrow: Ref.Mk, A, B](kp: KeyPoolConcrete[F,A, B], k: A): Resource[F, Managed[F, B]] = {
     def go(pm: PoolMap[A, B]): (PoolMap[A, B], Option[B]) = pm match {
       case p@PoolClosed() => (p, None)
       case pOrig@PoolOpen(idleCount, m) =>

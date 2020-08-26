@@ -7,7 +7,7 @@ import cats.effect._
 import cats.effect.concurrent._
 import scala.concurrent.duration._
 
-final class KeyPoolBuilder[F[_], A, B] private (
+final class KeyPoolBuilder[F[_]: TemporalThrow: Ref.Mk, A, B] private (
   val kpCreate: A => F[B],
   val kpDestroy: B => F[Unit],
   val kpDefaultReuseState: Reusable,
@@ -15,7 +15,7 @@ final class KeyPoolBuilder[F[_], A, B] private (
   val kpMaxPerKey: A => Int,
   val kpMaxTotal: Int,
   val onReaperException: Throwable => F[Unit]
-)(implicit F: Temporal[F, Throwable], R: Ref.Mk[F]){
+){
   private def copy(
     kpCreate: A => F[B] = this.kpCreate,
     kpDestroy: B => F[Unit] = this.kpDestroy,
@@ -83,10 +83,10 @@ final class KeyPoolBuilder[F[_], A, B] private (
 }
 
 object KeyPoolBuilder {
-  def apply[F[_], A, B](
+  def apply[F[_]: TemporalThrow: Ref.Mk, A, B](
     create: A => F[B],
     destroy: B => F[Unit]
-  )(implicit F: Temporal[F, Throwable], R: Ref.Mk[F]): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
+  ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
     create,
     destroy, 
     Defaults.defaultReuseState,

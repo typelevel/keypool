@@ -5,7 +5,6 @@ import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
 import scala.concurrent.duration._
-// import scala.concurrent.ExecutionContext.global
 import cats.effect.unsafe.implicits.global
 
 class KeypoolSpec extends mutable.Specification with ScalaCheck {
@@ -15,8 +14,6 @@ class KeypoolSpec extends mutable.Specification with ScalaCheck {
       def nothing(ref: Ref[IO, Int]): IO[Unit] = {
         ref.get.void
       }
-      // implicit val CS = IO.contextShift(global)
-      // implicit val T = IO.timer(global)
       KeyPoolBuilder(
         {i: Int => Ref.of[IO, Int](i)},
         nothing
