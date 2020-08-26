@@ -8,7 +8,7 @@ import scala.concurrent.duration._
 
 object Main extends IOApp {
 
-  def run(args: List[String]): IO[ExitCode] = {
+  def run(args: List[String]): IO[Int] = {
     // for {
       // KeyPool.createFullBounded(
         KeyPoolBuilder(
@@ -24,7 +24,7 @@ object Main extends IOApp {
           kp.take(()).use(_ => IO.unit) >> {
             def action : IO[Unit] = kp.state.flatMap{s => IO(println(s"State $s")) >> {
               if(s._1 === 0) IO.unit
-              else Timer[IO].sleep(1.second) >> action
+              else Temporal[IO].sleep(1.second) >> action
             }}
             action
           }
@@ -43,7 +43,7 @@ object Main extends IOApp {
         //   out <- IO(println(s"Now - $now, Now2 - $now2"))
         // } yield out
       // }
-      }.as(ExitCode.Success)
+      }.as(0)
 
     // val s = IO(IO(println)).flatten
     // } yield ExitCode.Success
