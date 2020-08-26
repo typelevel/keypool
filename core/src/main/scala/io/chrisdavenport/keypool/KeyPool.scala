@@ -118,12 +118,12 @@ object KeyPool {
    * stop running once our pool switches to PoolClosed.
    *
    */
-  private[keypool] def reap[F[_], A, B](
+  private[keypool] def reap[F[_]: TemporalThrow, A, B](
     destroy: B => F[Unit],
     idleTimeAllowedInPoolNanos: FiniteDuration,
     kpVar: Ref[F, PoolMap[A, B]],
     onReaperException: Throwable => F[Unit]
-  )(implicit F: Temporal[F, Throwable]): F[Unit] = {
+  ): F[Unit] = {
     // We are going to do non-referentially tranpsarent things as we may be waiting for our modification to go through
     // which may change the state depending on when the modification block is running atomically at the moment
     def findStale(now: FiniteDuration, idleCount: Int, m: Map[A, PoolList[B]]): (PoolMap[A, B], List[(A, B)]) = {
@@ -161,21 +161,21 @@ object KeyPool {
       (PoolMap.open(idleCount_, toKeep), toDestroy)
     }
 
-    val sleep = F.sleep(5.seconds).void
+    val sleep = Temporal[F].sleep(5.seconds).void
 
     // Wait 5 Seconds
     def loop: F[Unit] = for {
-      now <- F.monotonic
+      now <- Temporal[F].monotonic
       _ <- {
         kpVar.tryModify {
-          case p@PoolClosed() => (p, F.unit)
+          case p@PoolClosed() => (p, Applicative[F].unit)
           case p@PoolOpen(idleCount, m) =>
-            if (m.isEmpty) (p, F.unit) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
+            if (m.isEmpty) (p, Applicative[F].unit) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
               val (m_, toDestroy) = findStale(now, idleCount,m)
               (m_, toDestroy.traverse_(r => destroy(r._2)).attempt.flatMap {
                 case Left(t) => onReaperException(t) // CHEATING .handleErrorWith(t => F.delay(t.printStackTrace()))
-                case Right(()) => F.unit
+                case Right(()) => Applicative[F].unit
               })
             }
         }
