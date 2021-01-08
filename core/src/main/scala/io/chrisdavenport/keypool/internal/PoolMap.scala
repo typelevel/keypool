@@ -1,7 +1,7 @@
 package io.chrisdavenport.keypool.internal
 
 import cats._
-import cats.implicits._
+import cats.syntax.all._
 
 private[keypool] sealed trait PoolMap[Key, Rezource] extends Product with Serializable {
   def foldLeft[B](b: B)(f: (B, Rezource) => B): B = this match {

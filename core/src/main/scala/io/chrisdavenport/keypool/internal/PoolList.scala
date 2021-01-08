@@ -1,7 +1,6 @@
 package io.chrisdavenport.keypool.internal
 
 import cats._
-import cats.implicits._
 
 private[keypool] sealed trait PoolList[A] extends Product with Serializable {
   def toList: List[(Long, A)] = this match {
