@@ -1,13 +1,13 @@
 import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 
-val Scala212 = "2.12.13"
+val Scala213 = "2.13.4"
 
-ThisBuild / crossScalaVersions := Seq(Scala212, "2.13.4", "3.0.0-M2", "3.0.0-M3")
+ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0-M2", "3.0.0-M3")
 ThisBuild / scalaVersion := crossScalaVersions.value.last
 
 ThisBuild / githubWorkflowArtifactUpload := false
 
-val Scala212Cond = s"matrix.scala == '$Scala212'"
+val Scala213Cond = s"matrix.scala == '$Scala213'"
 
 def rubySetupSteps(cond: Option[String]) = Seq(
   WorkflowStep.Use(
@@ -24,14 +24,14 @@ def rubySetupSteps(cond: Option[String]) = Seq(
     cond = cond))
 
 ThisBuild / githubWorkflowBuildPreamble ++=
-  rubySetupSteps(Some(Scala212Cond))
+  rubySetupSteps(Some(Scala213Cond))
 
 ThisBuild / githubWorkflowBuild := Seq(
   WorkflowStep.Sbt(List("test", "mimaReportBinaryIssues")),
 
   WorkflowStep.Sbt(
     List("docs/makeMicrosite"),
-    cond = Some(Scala212Cond)))
+    cond = Some(Scala213Cond)))
 
 ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
 
@@ -53,8 +53,10 @@ ThisBuild / githubWorkflowPublish := Seq(
       "SONATYPE_USERNAME" -> "${{ secrets.SONATYPE_USERNAME }}")),
 
   WorkflowStep.Sbt(
-    List(s"++$Scala212", "docs/publishMicrosite"),
-    name = Some("Publish microsite")))
+    List(s"++$Scala213", "docs/publishMicrosite"),
+    name = Some("Publish microsite")
+  )
+)
 
 
 lazy val `keypool` = project.in(file("."))
@@ -231,7 +233,6 @@ lazy val micrositeSettings = {
       "gray-lighter" -> "#F4F3F4",
       "white-color" -> "#FFFFFF"
     ),
-    micrositeCompilingDocsTool := WithMdoc,
     micrositePushSiteWith := GitHub4s,
     micrositeGithubToken := sys.env.get("GITHUB_TOKEN"),
     micrositeExtraMdFiles := Map(
