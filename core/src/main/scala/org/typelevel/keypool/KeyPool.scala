@@ -2,7 +2,7 @@ package org.typelevel.keypool
 
 import cats._
 import cats.syntax.all._
-import cats.effect._
+import cats.effect.{MonadThrow => _, _}
 import cats.effect.concurrent._
 import scala.concurrent.duration._
 import org.typelevel.keypool.internal._
@@ -96,7 +96,7 @@ object KeyPool {
   /**
    * Make a 'KeyPool' inactive and destroy all idle resources.
    */
-  private[keypool] def destroy[F[_]: MonadError[*[_], Throwable], A, B](
+  private[keypool] def destroy[F[_]: MonadThrow, A, B](
     kpDestroy: B => F[Unit],
     kpVar: Ref[F, PoolMap[A, B]]
   ): F[Unit] = for {

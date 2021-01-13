@@ -35,10 +35,10 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, A, B] private (
   )
 
   def doOnCreate(f: B => F[Unit]): KeyPoolBuilder[F, A,B] =
-    copy(kpCreate = {k: A => this.kpCreate(k).flatMap(v => f(v).attempt.void.as(v))})
+    copy(kpCreate = {(k: A) => this.kpCreate(k).flatMap(v => f(v).attempt.void.as(v))})
 
   def doOnDestroy(f: B => F[Unit]): KeyPoolBuilder[F, A, B] =
-    copy(kpDestroy = {r: B => f(r).attempt.void >> this.kpDestroy(r)})
+    copy(kpDestroy = {(r: B) => f(r).attempt.void >> this.kpDestroy(r)})
 
   def withDefaultReuseState(defaultReuseState: Reusable) =
     copy(kpDefaultReuseState = defaultReuseState)
@@ -101,6 +101,6 @@ object KeyPoolBuilder {
     val idleTimeAllowedInPool = 30.seconds
     def maxPerKey[K](k: K): Int = Function.const(100)(k)
     val maxTotal = 100
-    def onReaperException[F[_]: Applicative] = {t: Throwable => Function.const(Applicative[F].unit)(t)}
+    def onReaperException[F[_]: Applicative] = {(t: Throwable) => Function.const(Applicative[F].unit)(t)}
   }
 }
