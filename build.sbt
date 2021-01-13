@@ -68,11 +68,11 @@ lazy val core = project.in(file("core"))
     name := "keypool"
   )
 
-lazy val docs = project.in(file("docs"))
+lazy val docs = project.in(file("site"))
   .settings(commonSettings, skipOnPublishSettings, micrositeSettings)
   .dependsOn(core)
   .enablePlugins(MicrositesPlugin)
-  .enablePlugins(TutPlugin)
+  .enablePlugins(MdocPlugin)
 
 lazy val contributors = Seq(
   "ChristopherDavenport" -> "Christopher Davenport"
@@ -218,7 +218,7 @@ lazy val micrositeSettings = {
     micrositeGithubOwner := "ChristopherDavenport",
     micrositeGithubRepo := "keypool",
     micrositeBaseUrl := "/keypool",
-    micrositeDocumentationUrl := "https://www.javadoc.io/doc/io.chrisdavenport/keypool_2.12",
+    micrositeDocumentationUrl := "https://www.javadoc.io/doc/org.typelevel/keypool_2.12",
     micrositeFooterText := None,
     micrositeHighlightTheme := "atom-one-light",
     micrositePalette := Map(
@@ -231,15 +231,7 @@ lazy val micrositeSettings = {
       "gray-lighter" -> "#F4F3F4",
       "white-color" -> "#FFFFFF"
     ),
-    fork in tut := true,
-    scalacOptions in Tut --= Seq(
-      "-Xfatal-warnings",
-      "-Ywarn-unused-import",
-      "-Ywarn-numeric-widen",
-      "-Ywarn-dead-code",
-      "-Ywarn-unused:imports",
-      "-Xlint:-missing-interpolator,_"
-    ),
+    micrositeCompilingDocsTool := WithMdoc,
     micrositePushSiteWith := GitHub4s,
     micrositeGithubToken := sys.env.get("GITHUB_TOKEN"),
     micrositeExtraMdFiles := Map(
