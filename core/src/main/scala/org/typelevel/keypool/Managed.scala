@@ -1,4 +1,4 @@
-package io.chrisdavenport.keypool
+package org.typelevel.keypool
 
 import cats.Functor
 import cats.effect.concurrent.Ref
@@ -18,7 +18,7 @@ final class Managed[F[_], A] private[keypool] (
 )
 
 object Managed {
-  implicit def managedFunctor[F[_]]: Functor[Managed[F, ?]] = new Functor[Managed[F, ?]]{
+  implicit def managedFunctor[F[_]]: Functor[Managed[F, *]] = new Functor[Managed[F, *]]{
     def map[A, B](fa: Managed[F,A])(f: A => B): Managed[F,B] = new Managed[F, B](
       f(fa.value),
       fa.isReused,

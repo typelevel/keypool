@@ -3,8 +3,7 @@ import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 lazy val `keypool` = project.in(file("."))
   .disablePlugins(MimaPlugin)
   .settings(commonSettings, releaseSettings, skipOnPublishSettings)
-  .settings(crossScalaVersions := Nil)
-  .aggregate(core)
+  .aggregate(core, docs)
 
 lazy val core = project.in(file("core"))
   .settings(commonSettings, releaseSettings, mimaSettings)
@@ -25,32 +24,33 @@ lazy val contributors = Seq(
 val catsV = "2.3.1"
 val catsEffectV = "2.3.1"
 
-val specs2V = "4.10.5"
+val munitCatsEffectV = "0.12.0"
 
-val kindProjectorV = "0.10.3"
+val kindProjectorV = "0.11.2"
 val betterMonadicForV = "0.3.1"
 
 // General Settings
 lazy val commonSettings = Seq(
-  organization := "io.chrisdavenport",
+  organization := "org.typelevel",
 
-  scalaVersion := "2.12.9",
-  crossScalaVersions := Seq("2.13.0", scalaVersion.value),
+  scalaVersion := "2.13.4",
+  crossScalaVersions := Seq("2.12.12", scalaVersion.value),
+
+  testFrameworks += new TestFramework("munit.Framework"),
 
   scalacOptions in (Compile, doc) ++= Seq(
       "-groups",
       "-sourcepath", (baseDirectory in LocalRootProject).value.getAbsolutePath,
-      "-doc-source-url", "https://github.com/ChristopherDavenport/keypool/blob/v" + version.value + "€{FILE_PATH}.scala"
+      "-doc-source-url", "https://github.com/typelevel/keypool/blob/v" + version.value + "€{FILE_PATH}.scala"
   ),
 
-  addCompilerPlugin("org.typelevel" %  "kind-projector" % kindProjectorV cross CrossVersion.binary),
+  addCompilerPlugin("org.typelevel" %  "kind-projector" % kindProjectorV cross CrossVersion.full),
   addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % betterMonadicForV),
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
 
-    "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
-    "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test
+    "org.typelevel"               %%% "munit-cats-effect-2"        % munitCatsEffectV         % Test,
   )
 )
 
@@ -59,11 +59,11 @@ lazy val releaseSettings = {
     publishArtifact in Test := false,
     scmInfo := Some(
       ScmInfo(
-        url("https://github.com/ChristopherDavenport/keypool"),
-        "git@github.com:ChristopherDavenport/keypool.git"
+        url("https://github.com/typelevel/keypool"),
+        "git@github.com:typelevel/keypool.git"
       )
     ),
-    homepage := Some(url("https://github.com/ChristopherDavenport/keypool")),
+    homepage := Some(url("https://github.com/typelevel/keypool")),
     licenses += ("MIT", url("http://opensource.org/licenses/MIT")),
     publishMavenStyle := true,
     pomIncludeRepository := { _ =>
@@ -141,7 +141,8 @@ lazy val mimaSettings = {
 lazy val micrositeSettings = {
   import microsites._
   Seq(
-    crossScalaVersions := List(scalaVersion.value),
+    mimaFailOnNoPrevious := false,
+    mimaPreviousArtifacts := Set(),
     micrositeName := "keypool",
     micrositeDescription := "A Keyed Pool for Scala",
     micrositeAuthor := "Christopher Davenport",
@@ -170,7 +171,6 @@ lazy val micrositeSettings = {
       "-Ywarn-unused:imports",
       "-Xlint:-missing-interpolator,_"
     ),
-    libraryDependencies += "com.47deg" %% "github4s" % "0.20.1",
     micrositePushSiteWith := GitHub4s,
     micrositeGithubToken := sys.env.get("GITHUB_TOKEN"),
     micrositeExtraMdFiles := Map(

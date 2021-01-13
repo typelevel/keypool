@@ -1,11 +1,11 @@
-package io.chrisdavenport.keypool
+package org.typelevel.keypool
 
 import cats._
 import cats.syntax.all._
 import cats.effect._
 import cats.effect.concurrent._
 import scala.concurrent.duration._
-import io.chrisdavenport.keypool.internal._
+import org.typelevel.keypool.internal._
 
 
 /**
@@ -64,10 +64,10 @@ object KeyPool {
   //
   // Instances
   //
-  implicit def keypoolFunctor[F[_]: Applicative, Z]: Functor[KeyPool[F, Z, ?]] = 
+  implicit def keypoolFunctor[F[_]: Applicative, Z]: Functor[KeyPool[F, Z, *]] = 
     new KPFunctor[F, Z]
   
-  private class KPFunctor[F[_]: Applicative, Z] extends Functor[KeyPool[F, Z, ?]]{
+  private class KPFunctor[F[_]: Applicative, Z] extends Functor[KeyPool[F, Z, *]]{
     override def map[A, B](fa: KeyPool[F,Z,A])(f: A => B): KeyPool[F,Z,B] = new KeyPool[F, Z, B] {
       def take(k: Z): Resource[F, Managed[F, B]] = 
         fa.take(k).map(_.map(f))
@@ -77,10 +77,10 @@ object KeyPool {
 
   // Instance Is an AlleyCat Due to Map Functor instance
   // Must Explicitly Import
-  def keypoolInvariant[F[_]: Functor, Z] : Invariant[KeyPool[F, ?, Z]] =
+  def keypoolInvariant[F[_]: Functor, Z] : Invariant[KeyPool[F, *, Z]] =
     new KPInvariant[F, Z]
 
-  private class KPInvariant[F[_]: Functor, Z] extends Invariant[KeyPool[F, ?, Z]]{
+  private class KPInvariant[F[_]: Functor, Z] extends Invariant[KeyPool[F, *, Z]]{
     override def imap[A, B](fa: KeyPool[F,A,Z])(f: A => B)(g: B => A): KeyPool[F,B,Z] = 
       new KeyPool[F, B, Z] {
         def take(k: B): Resource[F, Managed[F, Z]] = 
@@ -96,7 +96,7 @@ object KeyPool {
   /**
    * Make a 'KeyPool' inactive and destroy all idle resources.
    */
-  private[keypool] def destroy[F[_]: MonadError[?[_], Throwable], A, B](
+  private[keypool] def destroy[F[_]: MonadError[*[_], Throwable], A, B](
     kpDestroy: B => F[Unit],
     kpVar: Ref[F, PoolMap[A, B]]
   ): F[Unit] = for {
