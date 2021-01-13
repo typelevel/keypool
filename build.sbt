@@ -3,8 +3,7 @@ import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 lazy val `keypool` = project.in(file("."))
   .disablePlugins(MimaPlugin)
   .settings(commonSettings, releaseSettings, skipOnPublishSettings)
-  .settings(crossScalaVersions := Nil)
-  .aggregate(core)
+  .aggregate(core, docs)
 
 lazy val core = project.in(file("core"))
   .settings(commonSettings, releaseSettings, mimaSettings)
