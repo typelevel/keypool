@@ -36,6 +36,8 @@ lazy val commonSettings = Seq(
   scalaVersion := "2.13.4",
   crossScalaVersions := Seq("2.12.12", scalaVersion.value),
 
+  testFrameworks += new TestFramework("munit.Framework"),
+
   scalacOptions in (Compile, doc) ++= Seq(
       "-groups",
       "-sourcepath", (baseDirectory in LocalRootProject).value.getAbsolutePath,
