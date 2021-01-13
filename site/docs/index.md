@@ -3,7 +3,7 @@ layout: home
 
 ---
 
-# keyedpool - A Keyed Pool for Scala [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org/keypool_2.12/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.chrisdavenport/keypool_2.12)
+# keyedpool - A Keyed Pool for Scala [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.typelevel/keypool_2.13/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.typelevel/keypool_2.13)
 
 ## Quick Start
 
@@ -12,6 +12,6 @@ To use keypool in an existing SBT project with Scala 2.12 or a later version, ad
 
 ```scala
 libraryDependencies ++= Seq(
-  "io.chrisdavenport" %% "keypool" % "<version>"
+  "org.typelevel" %% "keypool" % "<version>"
 )
 ```
