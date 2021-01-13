@@ -22,13 +22,13 @@ class KeypoolSpec extends CatsEffectSuite {
       ref.get.void
     }
     KeyPoolBuilder(
-      {i: Int => Ref.of[IO, Int](i)},
+      {(i: Int) => Ref.of[IO, Int](i)},
       nothing
     ).withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxPerKey(Function.const(10))
       .withMaxTotal(10)
-      .withOnReaperException({_: Throwable => IO.unit})
+      .withOnReaperException({(_: Throwable) => IO.unit})
       .build
       .use( k => 
 
@@ -43,13 +43,13 @@ class KeypoolSpec extends CatsEffectSuite {
       ref.get.void
     }
     KeyPoolBuilder(
-      {i: Int => Ref.of[IO, Int](i)},
+      {(i: Int) => Ref.of[IO, Int](i)},
       nothing
     ).withDefaultReuseState(Reusable.DontReuse)
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxPerKey(Function.const(10))
       .withMaxTotal(10)
-      .withOnReaperException({_: Throwable => IO.unit})
+      .withOnReaperException({(_: Throwable) => IO.unit})
       .build
     .use( k =>
 
@@ -64,13 +64,13 @@ class KeypoolSpec extends CatsEffectSuite {
       ref.get.void
     }
     KeyPoolBuilder(
-      {i: Int => Ref.of[IO, Int](i)},
+      {(i: Int) => Ref.of[IO, Int](i)},
       nothing
     ).withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxPerKey(Function.const(1))
       .withMaxTotal(1)
-      .withOnReaperException{_: Throwable => IO.unit}
+      .withOnReaperException{(_: Throwable) => IO.unit}
       .build
       .use{ k =>
 
@@ -87,13 +87,13 @@ class KeypoolSpec extends CatsEffectSuite {
       ref.get.void
     }
     KeyPoolBuilder(
-      {i: Int => Ref.of[IO, Int](i)},
+      {(i: Int) => Ref.of[IO, Int](i)},
       nothing
     ).withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(Duration.Zero)
       .withMaxPerKey(Function.const(1))
       .withMaxTotal(1)
-      .withOnReaperException{_: Throwable => IO.unit}
+      .withOnReaperException{(_: Throwable) => IO.unit}
       .build
       .use{ k =>
 
@@ -115,13 +115,13 @@ class KeypoolSpec extends CatsEffectSuite {
     }
 
     KeyPoolBuilder(
-      {i: Int => Ref.of[IO, Int](i)},
+      {(i: Int) => Ref.of[IO, Int](i)},
       nothing
     ).withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(30.seconds)
       .withMaxPerKey(Function.const(1))
       .withMaxTotal(1)
-      .withOnReaperException{_: Throwable => IO.unit}
+      .withOnReaperException{(_: Throwable) => IO.unit}
       .build
       .use{ k =>
 

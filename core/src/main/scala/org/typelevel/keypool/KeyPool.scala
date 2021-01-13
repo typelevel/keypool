@@ -96,7 +96,7 @@ object KeyPool {
   /**
    * Make a 'KeyPool' inactive and destroy all idle resources.
    */
-  private[keypool] def destroy[F[_]: MonadError[*[_], Throwable], A, B](
+  private[keypool] def destroy[F[_]: MonadThrow, A, B](
     kpDestroy: B => F[Unit],
     kpVar: Ref[F, PoolMap[A, B]]
   ): F[Unit] = for {
