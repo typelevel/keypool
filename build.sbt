@@ -139,6 +139,8 @@ lazy val mimaSettings = {
 lazy val micrositeSettings = {
   import microsites._
   Seq(
+    mimaFailOnNoPrevious := false,
+    mimaPreviousArtifacts := Seq(),
     micrositeName := "keypool",
     micrositeDescription := "A Keyed Pool for Scala",
     micrositeAuthor := "Christopher Davenport",
