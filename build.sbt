@@ -25,32 +25,31 @@ lazy val contributors = Seq(
 val catsV = "2.3.1"
 val catsEffectV = "2.3.1"
 
-val specs2V = "4.10.5"
+val munitCatsEffectV = "0.12.0"
 
-val kindProjectorV = "0.10.3"
+val kindProjectorV = "0.11.2"
 val betterMonadicForV = "0.3.1"
 
 // General Settings
 lazy val commonSettings = Seq(
-  organization := "io.chrisdavenport",
+  organization := "org.typelevel",
 
-  scalaVersion := "2.12.9",
-  crossScalaVersions := Seq("2.13.0", scalaVersion.value),
+  scalaVersion := "2.13.4",
+  crossScalaVersions := Seq("2.12.12", scalaVersion.value),
 
   scalacOptions in (Compile, doc) ++= Seq(
       "-groups",
       "-sourcepath", (baseDirectory in LocalRootProject).value.getAbsolutePath,
-      "-doc-source-url", "https://github.com/ChristopherDavenport/keypool/blob/v" + version.value + "€{FILE_PATH}.scala"
+      "-doc-source-url", "https://github.com/typelevel/keypool/blob/v" + version.value + "€{FILE_PATH}.scala"
   ),
 
-  addCompilerPlugin("org.typelevel" %  "kind-projector" % kindProjectorV cross CrossVersion.binary),
+  addCompilerPlugin("org.typelevel" %  "kind-projector" % kindProjectorV cross CrossVersion.full),
   addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % betterMonadicForV),
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
 
-    "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
-    "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test
+    "org.typelevel"               %%% "munit-cats-effect-2"        % munitCatsEffectV         % Test,
   )
 )
 
@@ -59,11 +58,11 @@ lazy val releaseSettings = {
     publishArtifact in Test := false,
     scmInfo := Some(
       ScmInfo(
-        url("https://github.com/ChristopherDavenport/keypool"),
-        "git@github.com:ChristopherDavenport/keypool.git"
+        url("https://github.com/typelevel/keypool"),
+        "git@github.com:typelevel/keypool.git"
       )
     ),
-    homepage := Some(url("https://github.com/ChristopherDavenport/keypool")),
+    homepage := Some(url("https://github.com/typelevel/keypool")),
     licenses += ("MIT", url("http://opensource.org/licenses/MIT")),
     publishMavenStyle := true,
     pomIncludeRepository := { _ =>

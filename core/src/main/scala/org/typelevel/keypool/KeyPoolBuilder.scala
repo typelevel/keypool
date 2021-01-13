@@ -1,4 +1,4 @@
-package io.chrisdavenport.keypool
+package org.typelevel.keypool
 
 import internal.{PoolMap, PoolList}
 import cats._
@@ -67,7 +67,7 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, A, B] private (
           val nanos = math.max(0L, fd.toNanos)
           Resource.make(Concurrent[F].start(keepRunning(KeyPool.reap(kpDestroy, nanos, kpVar, onReaperException))))(_.cancel)
         case _ =>
-          Applicative[Resource[F, ?]].unit
+          Applicative[Resource[F, *]].unit
       }
     } yield new KeyPool.KeyPoolConcrete(
       kpCreate,

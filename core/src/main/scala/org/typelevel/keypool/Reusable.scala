@@ -1,4 +1,4 @@
-package io.chrisdavenport.keypool
+package org.typelevel.keypool
 
 /**
  * Reusable is a Coproduct of the two states a Resource can be in at the

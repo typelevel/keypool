@@ -1,7 +1,7 @@
-package io.chrisdavenport.keypool
+package org.typelevel.keypool
 
 
-import cats.implicits._
+import cats.syntax.all._
 import cats.effect._
 import cats.effect.concurrent._
 import scala.concurrent.duration._

@@ -1,4 +1,4 @@
-package io.chrisdavenport.keypool.internal
+package org.typelevel.keypool.internal
 
 import cats._
 

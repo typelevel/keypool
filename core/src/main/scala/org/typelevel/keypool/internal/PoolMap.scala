@@ -1,4 +1,4 @@
-package io.chrisdavenport.keypool.internal
+package org.typelevel.keypool.internal
 
 import cats._
 import cats.syntax.all._
@@ -14,7 +14,7 @@ private[keypool] sealed trait PoolMap[Key, Rezource] extends Product with Serial
   }
 }
 private[keypool] object PoolMap {
-  implicit def poolMapFoldable[K]: Foldable[PoolMap[K, ?]] = new Foldable[PoolMap[K, ?]]{
+  implicit def poolMapFoldable[K]: Foldable[PoolMap[K, *]] = new Foldable[PoolMap[K, *]]{
     def foldLeft[A, B](fa: PoolMap[K, A],b: B)(f: (B, A) => B): B = fa.foldLeft(b)(f)
     def foldRight[A, B](fa: PoolMap[K, A],lb: Eval[B])(f: (A, Eval[B]) => Eval[B]): Eval[B] =
       fa.foldRight(lb)(f)
