@@ -81,7 +81,7 @@ lazy val contributors = Seq(
 )
 
 val catsV = "2.3.1"
-val catsEffectV = "2.3.1"
+val catsEffectV = "3.0.0-M5"
 
 val munitCatsEffectV = "0.12.0"
 
@@ -119,9 +119,9 @@ lazy val commonSettings = Seq(
   },
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
-    "org.typelevel"               %% "cats-effect"                % catsEffectV,
+    "org.typelevel"               %% "cats-effect-std"                % catsEffectV,
 
-    "org.typelevel"               %%% "munit-cats-effect-2"        % munitCatsEffectV         % Test,
+    "org.typelevel"               %%% "munit-cats-effect-3"        % munitCatsEffectV         % Test,
   )
 )
 

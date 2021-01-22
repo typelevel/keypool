@@ -4,10 +4,10 @@ import internal.{PoolMap, PoolList}
 import cats._
 import cats.syntax.all._
 import cats.effect._
-import cats.effect.concurrent._
+import cats.effect.kernel._
 import scala.concurrent.duration._
 
-final class KeyPoolBuilder[F[_]: Concurrent: Timer, A, B] private (
+final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
   val kpCreate: A => F[B],
   val kpDestroy: B => F[Unit],
   val kpDefaultReuseState: Reusable,
@@ -64,7 +64,7 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, A, B] private (
       )(kpVar => KeyPool.destroy(kpDestroy, kpVar))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
-          val nanos = math.max(0L, fd.toNanos)
+          val nanos = 0.seconds.max(fd)
           Resource.make(Concurrent[F].start(keepRunning(KeyPool.reap(kpDestroy, nanos, kpVar, onReaperException))))(_.cancel)
         case _ =>
           Applicative[Resource[F, *]].unit
@@ -83,7 +83,7 @@ final class KeyPoolBuilder[F[_]: Concurrent: Timer, A, B] private (
 }
 
 object KeyPoolBuilder {
-  def apply[F[_]: Concurrent: Timer, A, B](
+  def apply[F[_]: Temporal, A, B](
     create: A => F[B],
     destroy: B => F[Unit]
   ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
