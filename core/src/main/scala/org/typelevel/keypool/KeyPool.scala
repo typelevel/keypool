@@ -2,8 +2,7 @@ package org.typelevel.keypool
 
 import cats._
 import cats.syntax.all._
-import cats.effect._
-import cats.effect.kernel._
+import cats.effect.kernel.{MonadThrow => _, _}
 import scala.concurrent.duration._
 import org.typelevel.keypool.internal._
 

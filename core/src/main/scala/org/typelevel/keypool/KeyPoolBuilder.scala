@@ -3,7 +3,6 @@ package org.typelevel.keypool
 import internal.{PoolMap, PoolList}
 import cats._
 import cats.syntax.all._
-import cats.effect._
 import cats.effect.kernel._
 import scala.concurrent.duration._
 
