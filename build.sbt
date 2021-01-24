@@ -11,7 +11,7 @@ val Scala213Cond = s"matrix.scala == '$Scala213'"
 
 def rubySetupSteps(cond: Option[String]) = Seq(
   WorkflowStep.Use(
-    "ruby", "setup-ruby", "v1",
+    UseRef.Public("ruby", "setup-ruby", "v1"),
     name = Some("Setup Ruby"),
     params = Map("ruby-version" -> "2.6.0"),
     cond = cond),
@@ -163,7 +163,7 @@ lazy val mimaSettings = {
     val minorVersions : List[Int] =
       if (major >= 1) Range(0, minor).inclusive.toList
       else List(minor)
-    def patchVersions(currentMinVersion: Int): List[Int] = 
+    def patchVersions(currentMinVersion: Int): List[Int] =
       if (minor == 0 && patch == 0) List.empty[Int]
       else if (currentMinVersion != minor) List(0)
       else Range(0, patch - 1).inclusive.toList
@@ -197,7 +197,7 @@ lazy val mimaSettings = {
     mimaPreviousArtifacts := (mimaVersions(version.value) ++ extraVersions)
       .filterNot(excludedVersions.contains(_))
       .filterNot(Function.const(scalaVersion.value == "2.13.0-M5"))
-      .map{v => 
+      .map{v =>
         val moduleN = moduleName.value + "_" + scalaBinaryVersion.value.toString
         organization.value % moduleN % v
       },
