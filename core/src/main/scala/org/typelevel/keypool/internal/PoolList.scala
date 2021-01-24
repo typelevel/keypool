@@ -1,19 +1,20 @@
 package org.typelevel.keypool.internal
 
 import cats._
+import scala.concurrent.duration.FiniteDuration
 
 private[keypool] sealed trait PoolList[A] extends Product with Serializable {
-  def toList: List[(Long, A)] = this match {
+  def toList: List[(FiniteDuration, A)] = this match {
     case One(a, created) => List((created, a))
     case Cons(a, _, created, tail) => (created, a) :: tail.toList
   }
 }
 private[keypool] object PoolList {
-  def fromList[A](l: List[(Long, A)]): Option[PoolList[A]] = l match {
+  def fromList[A](l: List[(FiniteDuration, A)]): Option[PoolList[A]] = l match {
     case Nil => None
     case (t, a):: Nil => Some(One(a, t))
     case list => {
-      def go(l: List[(Long, A)]): (Int, PoolList[A]) = l match {
+      def go(l: List[(FiniteDuration, A)]): (Int, PoolList[A]) = l match {
         case Nil => throw new Throwable("PoolList.fromList Nil")
         case (t, a) :: Nil => (2, One(a, t))
         case (t, a) :: rest =>
@@ -33,5 +34,5 @@ private[keypool] object PoolList {
   }
 }
 
-private[keypool] final case class One[A](a: A, created: Long) extends PoolList[A]
-private[keypool] final case class Cons[A](a: A, length: Int, created: Long, xs: PoolList[A]) extends PoolList[A]
+private[keypool] final case class One[A](a: A, created: FiniteDuration) extends PoolList[A]
+private[keypool] final case class Cons[A](a: A, length: Int, created: FiniteDuration, xs: PoolList[A]) extends PoolList[A]

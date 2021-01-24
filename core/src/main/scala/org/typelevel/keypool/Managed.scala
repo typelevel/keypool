@@ -1,7 +1,7 @@
 package org.typelevel.keypool
 
 import cats.Functor
-import cats.effect.concurrent.Ref
+import cats.effect.kernel._
 
 /**
  * A managed Resource.

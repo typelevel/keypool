@@ -2,7 +2,6 @@ package org.typelevel.keypool
 
 import cats.syntax.all._
 import cats.effect._
-import cats.effect.concurrent._
 import scala.concurrent.duration._
 import munit.CatsEffectSuite
 import scala.concurrent.ExecutionContext
@@ -10,12 +9,6 @@ import scala.concurrent.ExecutionContext
 class KeypoolSpec extends CatsEffectSuite {
 
   override val munitExecutionContext: ExecutionContext = ExecutionContext.global
-
-  // This is not normally necessary but Dotty requires it
-  implicit val ioConcurrentEffect: ConcurrentEffect[IO] =
-    IO.ioConcurrentEffect(munitContextShift)
-
-  implicit val ioTimer: Timer[IO] = IO.timer(munitExecutionContext)
 
   test("Keep Resources marked to be kept") {
     def nothing(ref: Ref[IO, Int]): IO[Unit] = {
@@ -103,7 +96,7 @@ class KeypoolSpec extends CatsEffectSuite {
       for {
         _ <- action
         init <- k.state.map(_._1)
-        _ <- Timer[IO].sleep(6.seconds)
+        _ <- Temporal[IO].sleep(6.seconds)
         later <- k.state.map(_._1)
       } yield assert(init === 1 && later === 0)
     }
@@ -130,7 +123,7 @@ class KeypoolSpec extends CatsEffectSuite {
       for {
         _ <- action
         init <- k.state.map(_._1)
-        _ <- Timer[IO].sleep(6.seconds)
+        _ <- Temporal[IO].sleep(6.seconds)
         later <- k.state.map(_._1)
       } yield assert(init === 1 && later === 1)
     }
