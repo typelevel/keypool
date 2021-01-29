@@ -83,7 +83,7 @@ lazy val contributors = Seq(
 val catsV = "2.3.1"
 val catsEffectV = "3.0.0-M5"
 
-val munitCatsEffectV = "0.12.0"
+val munitCatsEffectV = "0.13.0"
 
 val kindProjectorV = "0.11.3"
 val betterMonadicForV = "0.3.1"
