@@ -63,10 +63,10 @@ object KeyPool {
   //
   // Instances
   //
-  implicit def keypoolFunctor[F[_]: Applicative, Z]: Functor[KeyPool[F, Z, *]] = 
+  implicit def keypoolFunctor[F[_], Z]: Functor[KeyPool[F, Z, *]] =
     new KPFunctor[F, Z]
   
-  private class KPFunctor[F[_]: Applicative, Z] extends Functor[KeyPool[F, Z, *]]{
+  private class KPFunctor[F[_], Z] extends Functor[KeyPool[F, Z, *]]{
     override def map[A, B](fa: KeyPool[F,Z,A])(f: A => B): KeyPool[F,Z,B] = new KeyPool[F, Z, B] {
       def take(k: Z): Resource[F, Managed[F, B]] = 
         fa.take(k).map(_.map(f))
