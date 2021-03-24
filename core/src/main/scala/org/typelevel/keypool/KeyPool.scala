@@ -250,8 +250,8 @@ object KeyPool {
     }
 
     for {
-      optR <- Resource.liftF(kp.kpVar.modify(go))
-      releasedState <- Resource.liftF(Ref[F].of[Reusable](kp.kpDefaultReuseState))
+      optR <- Resource.eval(kp.kpVar.modify(go))
+      releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
       resource <- Resource.make(optR.fold(kp.kpCreate(k))(r => Sync[F].pure(r))){resource =>
         for {
         reusable <- releasedState.get
