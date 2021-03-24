@@ -1,6 +1,6 @@
 import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 
-val Scala213 = "2.13.4"
+val Scala213 = "2.13.5"
 
 ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0-M3", "3.0.0-RC1")
 ThisBuild / scalaVersion := crossScalaVersions.value.last
@@ -81,7 +81,7 @@ lazy val contributors = Seq(
 )
 
 val catsV = "2.4.2"
-val catsEffectV = "2.3.3"
+val catsEffectV = "2.4.0"
 
 val munitCatsEffectV = "0.13.1"
 
