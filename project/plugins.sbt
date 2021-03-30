@@ -8,6 +8,6 @@ addSbtPlugin("com.geirsson" % "sbt-ci-release" % "1.5.7")
 addSbtPlugin("ch.epfl.lamp" % "sbt-dotty" % "0.5.3")
 addSbtPlugin("com.codecommit" % "sbt-github-actions" % "0.10.1")
 
-addSbtPlugin("org.scalameta" % "sbt-mdoc" % "2.2.18")
+addSbtPlugin("org.scalameta" % "sbt-mdoc" % "2.2.19")
 addSbtPlugin("com.47deg" % "sbt-microsites" % "1.3.2")
 addSbtPlugin("com.typesafe.sbt" % "sbt-ghpages" % "0.6.3")
