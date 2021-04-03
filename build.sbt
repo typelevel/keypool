@@ -187,7 +187,10 @@ lazy val mimaSettings = {
     }
   }
   // Safety Net For Exclusions
-  lazy val excludedVersions: Set[String] = Set()
+  lazy val excludedVersions: Set[String] = Set(
+    "0.3.1", // failed to publish
+    "0.3.2", // failed to publish
+  )
 
   // Safety Net for Inclusions
   lazy val extraVersions: Set[String] = Set()
