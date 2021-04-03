@@ -2,7 +2,7 @@ import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 
 val Scala213 = "2.13.5"
 
-ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0-M3", "3.0.0-RC1")
+ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0-RC1", "3.0.0-RC2")
 ThisBuild / scalaVersion := crossScalaVersions.value.last
 
 ThisBuild / githubWorkflowArtifactUpload := false
@@ -33,6 +33,7 @@ ThisBuild / githubWorkflowBuild := Seq(
     List("docs/makeMicrosite"),
     cond = Some(Scala213Cond)))
 
+ThisBuild / githubWorkflowTargetBranches := List("*", "series/*")
 ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
 
 // currently only publishing tags
@@ -80,10 +81,10 @@ lazy val contributors = Seq(
   "ChristopherDavenport" -> "Christopher Davenport"
 )
 
-val catsV = "2.4.2"
-val catsEffectV = "2.4.0"
+val catsV = "2.5.0"
+val catsEffectV = "2.4.1"
 
-val munitCatsEffectV = "0.13.1"
+val munitCatsEffectV = "1.0.1"
 
 val kindProjectorV = "0.11.3"
 val betterMonadicForV = "0.3.1"
@@ -163,7 +164,7 @@ lazy val mimaSettings = {
     val minorVersions : List[Int] =
       if (major >= 1) Range(0, minor).inclusive.toList
       else List(minor)
-    def patchVersions(currentMinVersion: Int): List[Int] = 
+    def patchVersions(currentMinVersion: Int): List[Int] =
       if (minor == 0 && patch == 0) List.empty[Int]
       else if (currentMinVersion != minor) List(0)
       else Range(0, patch - 1).inclusive.toList
@@ -186,7 +187,10 @@ lazy val mimaSettings = {
     }
   }
   // Safety Net For Exclusions
-  lazy val excludedVersions: Set[String] = Set()
+  lazy val excludedVersions: Set[String] = Set(
+    "0.3.1", // failed to publish
+    "0.3.2", // failed to publish
+  )
 
   // Safety Net for Inclusions
   lazy val extraVersions: Set[String] = Set()
