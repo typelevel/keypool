@@ -9,9 +9,9 @@ name: Continuous Integration
 
 on:
   pull_request:
-    branches: ['*']
+    branches: ['*', series/*]
   push:
-    branches: ['*']
+    branches: ['*', series/*]
     tags: [v*]
 
 env:
@@ -23,7 +23,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        scala: [2.12.13, 2.13.5, 3.0.0-M3, 3.0.0-RC1]
+        scala: [2.12.13, 2.13.5, 3.0.0-RC1, 3.0.0-RC2]
         java: [adopt@1.8]
     runs-on: ${{ matrix.os }}
     steps:
@@ -76,7 +76,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        scala: [3.0.0-RC1]
+        scala: [3.0.0-RC2]
         java: [adopt@1.8]
     runs-on: ${{ matrix.os }}
     steps:

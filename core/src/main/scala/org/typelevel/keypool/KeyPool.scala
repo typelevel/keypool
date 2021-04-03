@@ -56,7 +56,7 @@ object KeyPool {
     def take(k: A): Resource[F, Managed[F, B]] =
       KeyPool.take(this, k)
 
-    def state: F[(Int, Map[A, Int])] = 
+    def state: F[(Int, Map[A, Int])] =
       KeyPool.state(kpVar)
   }
 
@@ -68,7 +68,7 @@ object KeyPool {
   
   private class KPFunctor[F[_], Z] extends Functor[KeyPool[F, Z, *]]{
     override def map[A, B](fa: KeyPool[F,Z,A])(f: A => B): KeyPool[F,Z,B] = new KeyPool[F, Z, B] {
-      def take(k: Z): Resource[F, Managed[F, B]] = 
+      def take(k: Z): Resource[F, Managed[F, B]] =
         fa.take(k).map(_.map(f))
       def state: F[(Int, Map[Z, Int])] = fa.state
     }
@@ -80,11 +80,11 @@ object KeyPool {
     new KPInvariant[F, Z]
 
   private class KPInvariant[F[_]: Functor, Z] extends Invariant[KeyPool[F, *, Z]]{
-    override def imap[A, B](fa: KeyPool[F,A,Z])(f: A => B)(g: B => A): KeyPool[F,B,Z] = 
+    override def imap[A, B](fa: KeyPool[F,A,Z])(f: A => B)(g: B => A): KeyPool[F,B,Z] =
       new KeyPool[F, B, Z] {
-        def take(k: B): Resource[F, Managed[F, Z]] = 
+        def take(k: B): Resource[F, Managed[F, Z]] =
           fa.take(g(k))
-        def state: F[(Int, Map[B, Int])] = fa.state.map{ case (total, m) => 
+        def state: F[(Int, Map[B, Int])] = fa.state.map{ case (total, m) =>
           (total, m.map{ case (a, i) => (f(a), i)})
         }
       }

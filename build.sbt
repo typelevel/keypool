@@ -2,7 +2,7 @@ import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 
 val Scala213 = "2.13.5"
 
-ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0-M3", "3.0.0-RC1")
+ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0-RC1", "3.0.0-RC2")
 ThisBuild / scalaVersion := crossScalaVersions.value.last
 
 ThisBuild / githubWorkflowArtifactUpload := false
@@ -33,6 +33,7 @@ ThisBuild / githubWorkflowBuild := Seq(
     List("docs/makeMicrosite"),
     cond = Some(Scala213Cond)))
 
+ThisBuild / githubWorkflowTargetBranches := List("*", "series/*")
 ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
 
 // currently only publishing tags
@@ -80,10 +81,10 @@ lazy val contributors = Seq(
   "ChristopherDavenport" -> "Christopher Davenport"
 )
 
-val catsV = "2.4.2"
+val catsV = "2.5.0"
 val catsEffectV = "3.0.0"
 
-val munitCatsEffectV = "1.0.0"
+val munitCatsEffectV = "1.0.1"
 
 val kindProjectorV = "0.11.3"
 val betterMonadicForV = "0.3.1"
@@ -187,7 +188,10 @@ lazy val mimaSettings = {
     }
   }
   // Safety Net For Exclusions
-  lazy val excludedVersions: Set[String] = Set()
+  lazy val excludedVersions: Set[String] = Set(
+    "0.3.1", // failed to publish
+    "0.3.2", // failed to publish
+  )
 
   // Safety Net for Inclusions
   lazy val extraVersions: Set[String] = Set()
