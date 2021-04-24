@@ -2,7 +2,7 @@ import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 
 val Scala213 = "2.13.5"
 
-ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0-RC1", "3.0.0-RC2")
+ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0-RC2", "3.0.0-RC3")
 ThisBuild / scalaVersion := crossScalaVersions.value.last
 
 ThisBuild / githubWorkflowArtifactUpload := false
@@ -81,10 +81,10 @@ lazy val contributors = Seq(
   "ChristopherDavenport" -> "Christopher Davenport"
 )
 
-val catsV = "2.5.0"
-val catsEffectV = "3.0.2"
+val catsV = "2.6.0"
+val catsEffectV = "3.1.0"
 
-val munitCatsEffectV = "1.0.1"
+val munitCatsEffectV = "1.0.2"
 
 val kindProjectorV = "0.11.3"
 val betterMonadicForV = "0.3.1"
