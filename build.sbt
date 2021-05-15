@@ -86,7 +86,7 @@ val catsEffectV = "3.1.0"
 
 val munitCatsEffectV = "1.0.2"
 
-val kindProjectorV = "0.12.0"
+val kindProjectorV = "0.13.0"
 val betterMonadicForV = "0.3.1"
 
 // General Settings
