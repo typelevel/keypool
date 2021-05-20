@@ -2,7 +2,7 @@ import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 
 val Scala213 = "2.13.5"
 
-ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0-RC2", "3.0.0-RC3")
+ThisBuild / crossScalaVersions := Seq("2.12.13", Scala213, "3.0.0")
 ThisBuild / scalaVersion := crossScalaVersions.value.last
 
 ThisBuild / githubWorkflowArtifactUpload := false
@@ -81,10 +81,10 @@ lazy val contributors = Seq(
   "ChristopherDavenport" -> "Christopher Davenport"
 )
 
-val catsV = "2.6.0"
-val catsEffectV = "3.1.0"
+val catsV = "2.6.1"
+val catsEffectV = "3.1.1"
 
-val munitCatsEffectV = "1.0.2"
+val munitCatsEffectV = "1.0.3"
 
 val kindProjectorV = "0.13.0"
 val betterMonadicForV = "0.3.1"
@@ -95,9 +95,9 @@ lazy val commonSettings = Seq(
 
   testFrameworks += new TestFramework("munit.Framework"),
 
-  scalacOptions in (Compile, doc) ++= Seq(
+  Compile / doc / scalacOptions ++= Seq(
       "-groups",
-      "-sourcepath", (baseDirectory in LocalRootProject).value.getAbsolutePath,
+      "-sourcepath", (LocalRootProject / baseDirectory).value.getAbsolutePath,
       "-doc-source-url", "https://github.com/typelevel/keypool/blob/v" + version.value + "€{FILE_PATH}.scala"
   ),
   libraryDependencies ++= {
@@ -129,7 +129,7 @@ lazy val commonSettings = Seq(
 
 lazy val releaseSettings = {
   Seq(
-    publishArtifact in Test := false,
+    Test / publishArtifact := false,
     scmInfo := Some(
       ScmInfo(
         url("https://github.com/typelevel/keypool"),
@@ -250,7 +250,7 @@ lazy val micrositeSettings = {
 }
 
 lazy val skipOnPublishSettings = Seq(
-  skip in publish := true,
+  publish / skip := true,
   publish := (()),
   publishLocal := (()),
   publishArtifact := false,
