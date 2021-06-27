@@ -62,6 +62,12 @@ jobs:
           gem install saas
           gem install jekyll -v 3.2.1
 
+      - name: Setup NodeJS v14 LTS
+        if: matrix.platform == 'JS'
+        uses: actions/setup-node@v2.1.5
+        with:
+          node-version: 14
+
       - name: Check that workflows are up to date
         run: sbt --client '++${{ matrix.scala }}; githubWorkflowCheck'
 
@@ -114,12 +120,6 @@ jobs:
         run: |
           gem install saas
           gem install jekyll -v 3.2.1
-
-      - name: Setup NodeJS v14 LTS
-        if: matrix.platform == 'JS'
-        uses: actions/setup-node@v2.1.5
-        with:
-          node-version: 14
 
       - name: Publish artifacts to Sonatype
         env:

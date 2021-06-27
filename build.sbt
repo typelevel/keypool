@@ -44,13 +44,15 @@ ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
 ThisBuild / githubWorkflowPublishTargetBranches :=
   Seq(RefPredicate.StartsWith(Ref.Tag("v")))
 
+ThisBuild / githubWorkflowBuildPreamble +=
+  WorkflowStep.Use(
+    UseRef.Public("actions", "setup-node", "v2.1.5"),
+    name = Some("Setup NodeJS v14 LTS"),
+    params = Map("node-version" -> "14"),
+    cond = Some(JSCond))
 ThisBuild / githubWorkflowPublishPreamble ++=
-  WorkflowStep.Use(UseRef.Public("olafurpg", "setup-gpg", "v3")) +: rubySetupSteps(None) :+
-    WorkflowStep.Use(
-      UseRef.Public("actions", "setup-node", "v2.1.5"),
-      name = Some("Setup NodeJS v14 LTS"),
-      params = Map("node-version" -> "14"),
-      cond = Some(JSCond))
+  WorkflowStep.Use(UseRef.Public("olafurpg", "setup-gpg", "v3")) +: rubySetupSteps(None)
+
 
 ThisBuild / githubWorkflowPublish := Seq(
   WorkflowStep.Sbt(
