@@ -114,6 +114,12 @@ jobs:
           gem install saas
           gem install jekyll -v 3.2.1
 
+      - name: Setup NodeJS v14 LTS
+        if: matrix.ci == 'ciJS'
+        uses: actions/setup-node@v2.1.5
+        with:
+          node-version: 14
+
       - name: Publish artifacts to Sonatype
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
