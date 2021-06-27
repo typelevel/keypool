@@ -25,6 +25,7 @@ jobs:
         os: [ubuntu-latest]
         scala: [2.12.14, 2.13.6, 3.0.0]
         java: [adopt@1.8]
+        platform: [JVM, JS]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout current branch (full)
@@ -50,13 +51,13 @@ jobs:
           key: ${{ runner.os }}-sbt-cache-v2-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/build.properties') }}
 
       - name: Setup Ruby
-        if: matrix.scala == '2.13.6'
+        if: matrix.scala == '2.13.6' && matrix.platform == 'JVM'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: 2.6.0
 
       - name: Install microsite dependencies
-        if: matrix.scala == '2.13.6'
+        if: matrix.scala == '2.13.6' && matrix.platform == 'JVM'
         run: |
           gem install saas
           gem install jekyll -v 3.2.1
@@ -64,9 +65,9 @@ jobs:
       - name: Check that workflows are up to date
         run: sbt --client '++${{ matrix.scala }}; githubWorkflowCheck'
 
-      - run: sbt --client '++${{ matrix.scala }}; test; mimaReportBinaryIssues'
+      - run: sbt --client '++${{ matrix.scala }}; core${{ matrix.platform }}/test; mimaReportBinaryIssues'
 
-      - if: matrix.scala == '2.13.6'
+      - if: matrix.scala == '2.13.6' && matrix.platform == 'JVM'
         run: sbt --client '++${{ matrix.scala }}; docs/makeMicrosite'
 
   publish:
@@ -115,7 +116,7 @@ jobs:
           gem install jekyll -v 3.2.1
 
       - name: Setup NodeJS v14 LTS
-        if: matrix.ci == 'ciJS'
+        if: matrix.platform == 'JS'
         uses: actions/setup-node@v2.1.5
         with:
           node-version: 14

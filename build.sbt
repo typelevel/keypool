@@ -8,6 +8,10 @@ ThisBuild / scalaVersion := crossScalaVersions.value.last
 ThisBuild / githubWorkflowArtifactUpload := false
 
 val Scala213Cond = s"matrix.scala == '$Scala213'"
+val JVMCond = "matrix.platform == 'JVM'"
+val JSCond = "matrix.platform == 'JS'"
+
+ThisBuild / githubWorkflowBuildMatrixAdditions += "platform" -> List("JVM", "JS")
 
 def rubySetupSteps(cond: Option[String]) = Seq(
   WorkflowStep.Use(
@@ -24,14 +28,14 @@ def rubySetupSteps(cond: Option[String]) = Seq(
     cond = cond))
 
 ThisBuild / githubWorkflowBuildPreamble ++=
-  rubySetupSteps(Some(Scala213Cond))
+  rubySetupSteps(Some(Scala213Cond + " && " + JVMCond))
 
 ThisBuild / githubWorkflowBuild := Seq(
-  WorkflowStep.Sbt(List("test", "mimaReportBinaryIssues")),
+  WorkflowStep.Sbt(List("core${{ matrix.platform }}/test", "mimaReportBinaryIssues")),
 
   WorkflowStep.Sbt(
     List("docs/makeMicrosite"),
-    cond = Some(Scala213Cond)))
+    cond = Some(Scala213Cond + " && " + JVMCond)))
 
 ThisBuild / githubWorkflowTargetBranches := List("*", "series/*")
 ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
@@ -46,7 +50,7 @@ ThisBuild / githubWorkflowPublishPreamble ++=
       UseRef.Public("actions", "setup-node", "v2.1.5"),
       name = Some("Setup NodeJS v14 LTS"),
       params = Map("node-version" -> "14"),
-      cond = Some("matrix.ci == 'ciJS'"))
+      cond = Some(JSCond))
 
 ThisBuild / githubWorkflowPublish := Seq(
   WorkflowStep.Sbt(
