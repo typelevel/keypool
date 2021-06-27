@@ -8,6 +8,10 @@ ThisBuild / scalaVersion := crossScalaVersions.value.last
 ThisBuild / githubWorkflowArtifactUpload := false
 
 val Scala213Cond = s"matrix.scala == '$Scala213'"
+val JVMCond = "matrix.platform == 'JVM'"
+val JSCond = "matrix.platform == 'JS'"
+
+ThisBuild / githubWorkflowBuildMatrixAdditions += "platform" -> List("JVM", "JS")
 
 def rubySetupSteps(cond: Option[String]) = Seq(
   WorkflowStep.Use(
@@ -24,14 +28,14 @@ def rubySetupSteps(cond: Option[String]) = Seq(
     cond = cond))
 
 ThisBuild / githubWorkflowBuildPreamble ++=
-  rubySetupSteps(Some(Scala213Cond))
+  rubySetupSteps(Some(Scala213Cond + " && " + JVMCond))
 
 ThisBuild / githubWorkflowBuild := Seq(
-  WorkflowStep.Sbt(List("test", "mimaReportBinaryIssues")),
+  WorkflowStep.Sbt(List("core${{ matrix.platform }}/test", "mimaReportBinaryIssues")),
 
   WorkflowStep.Sbt(
     List("docs/makeMicrosite"),
-    cond = Some(Scala213Cond)))
+    cond = Some(Scala213Cond + " && " + JVMCond)))
 
 ThisBuild / githubWorkflowTargetBranches := List("*", "series/*")
 ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
@@ -40,8 +44,15 @@ ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
 ThisBuild / githubWorkflowPublishTargetBranches :=
   Seq(RefPredicate.StartsWith(Ref.Tag("v")))
 
+ThisBuild / githubWorkflowBuildPreamble +=
+  WorkflowStep.Use(
+    UseRef.Public("actions", "setup-node", "v2.1.5"),
+    name = Some("Setup NodeJS v14 LTS"),
+    params = Map("node-version" -> "14"),
+    cond = Some(JSCond))
 ThisBuild / githubWorkflowPublishPreamble ++=
   WorkflowStep.Use(UseRef.Public("olafurpg", "setup-gpg", "v3")) +: rubySetupSteps(None)
+
 
 ThisBuild / githubWorkflowPublish := Seq(
   WorkflowStep.Sbt(
@@ -63,17 +74,20 @@ ThisBuild / githubWorkflowPublish := Seq(
 lazy val `keypool` = project.in(file("."))
   .disablePlugins(MimaPlugin)
   .settings(commonSettings, releaseSettings, skipOnPublishSettings)
-  .aggregate(core)
+  .aggregate(core.jvm, core.js)
 
-lazy val core = project.in(file("core"))
+lazy val core = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("core"))
   .settings(commonSettings, releaseSettings, mimaSettings)
+  .jsSettings(Test / scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule)))
   .settings(
     name := "keypool"
   )
 
 lazy val docs = project.in(file("site"))
   .settings(commonSettings, skipOnPublishSettings, micrositeSettings)
-  .dependsOn(core)
+  .dependsOn(core.jvm)
   .enablePlugins(MicrositesPlugin)
   .enablePlugins(MdocPlugin)
 
@@ -119,9 +133,9 @@ lazy val commonSettings = Seq(
       old
   },
   libraryDependencies ++= Seq(
-    "org.typelevel"               %% "cats-core"                  % catsV,
-    "org.typelevel"               %% "cats-effect-kernel"             % catsEffectV, 
-    "org.typelevel"               %% "cats-effect-std"                % catsEffectV           % Test,
+    "org.typelevel"               %%% "cats-core"                  % catsV,
+    "org.typelevel"               %%% "cats-effect-kernel"             % catsEffectV, 
+    "org.typelevel"               %%% "cats-effect-std"                % catsEffectV           % Test,
 
     "org.typelevel"               %%% "munit-cats-effect-3"        % munitCatsEffectV         % Test,
   )
