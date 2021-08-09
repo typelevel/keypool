@@ -103,11 +103,15 @@ val munitCatsEffectV = "1.0.5"
 val kindProjectorV = "0.13.0"
 val betterMonadicForV = "0.3.1"
 
+val isScala3 = settingKey[Boolean]("Check if Scala binary version equals 3")
+
 // General Settings
 lazy val commonSettings = Seq(
   organization := "org.typelevel",
 
   testFrameworks += new TestFramework("munit.Framework"),
+
+  isScala3 := scalaBinaryVersion.value == "3",
 
   Compile / doc / scalacOptions ++= Seq(
       "-groups",
@@ -115,29 +119,28 @@ lazy val commonSettings = Seq(
       "-doc-source-url", "https://github.com/typelevel/keypool/blob/v" + version.value + "€{FILE_PATH}.scala"
   ),
   libraryDependencies ++= {
-    if (isDotty.value) Seq.empty
+    if (isScala3.value) Seq.empty
     else Seq(
       compilerPlugin("org.typelevel" % "kind-projector" % kindProjectorV cross CrossVersion.full),
-      compilerPlugin("com.olegpy" %% "better-monadic-for" % betterMonadicForV),
+      compilerPlugin("com.olegpy" %% "better-monadic-for" % betterMonadicForV)
     )
   },
   scalacOptions ++= {
-    if (isDotty.value) Seq("-source:3.0-migration")
+    if (isScala3.value) Seq("-source:3.0-migration")
     else Seq()
   },
   Compile / doc / sources := {
     val old = (Compile / doc / sources).value
-    if (isDotty.value)
+    if (isScala3.value)
       Seq()
     else
       old
   },
   libraryDependencies ++= Seq(
     "org.typelevel"               %%% "cats-core"                  % catsV,
-    "org.typelevel"               %%% "cats-effect-kernel"             % catsEffectV, 
-    "org.typelevel"               %%% "cats-effect-std"                % catsEffectV           % Test,
-
-    "org.typelevel"               %%% "munit-cats-effect-3"        % munitCatsEffectV         % Test,
+    "org.typelevel"               %%% "cats-effect-kernel"         % catsEffectV,
+    "org.typelevel"               %%% "cats-effect-std"            % catsEffectV           % Test,
+    "org.typelevel"               %%% "munit-cats-effect-3"        % munitCatsEffectV      % Test
   )
 )
 
@@ -206,20 +209,20 @@ lazy val mimaSettings = {
     "0.3.1", // failed to publish
     "0.3.2", // failed to publish
     "0.4.3", // published, but failed to synchronize
-    "0.4.4", // failed to publish
+    "0.4.4" // failed to publish
   )
 
   // Safety Net for Inclusions
   lazy val extraVersions: Set[String] = Set()
 
   Seq(
+    isScala3 := scalaBinaryVersion.value == "3",
     mimaFailOnNoPrevious := false,
-    mimaFailOnProblem := mimaVersions(version.value).toList.headOption.isDefined,
-    mimaPreviousArtifacts := (mimaVersions(version.value) ++ extraVersions)
-      .filterNot(excludedVersions.contains(_))
+    mimaFailOnProblem := mimaVersions(version.value).toList.nonEmpty,
+    mimaPreviousArtifacts := (mimaVersions(version.value) ++ extraVersions).diff(excludedVersions)
       .filterNot(Function.const(scalaVersion.value == "2.13.0-M5"))
-      .filterNot(Function.const(isDotty.value))
-      .map{v =>
+      .filterNot(Function.const(isScala3.value))
+      .map { v =>
         val moduleN = moduleName.value + "_" + scalaBinaryVersion.value.toString
         organization.value % moduleN % v
       },
