@@ -103,15 +103,11 @@ val munitCatsEffectV = "1.0.5"
 val kindProjectorV = "0.13.0"
 val betterMonadicForV = "0.3.1"
 
-val isScala3 = settingKey[Boolean]("Check if Scala binary version equals 3")
-
 // General Settings
 lazy val commonSettings = Seq(
   organization := "org.typelevel",
 
   testFrameworks += new TestFramework("munit.Framework"),
-
-  isScala3 := scalaBinaryVersion.value == "3",
 
   Compile / doc / scalacOptions ++= Seq(
       "-groups",
@@ -119,19 +115,19 @@ lazy val commonSettings = Seq(
       "-doc-source-url", "https://github.com/typelevel/keypool/blob/v" + version.value + "€{FILE_PATH}.scala"
   ),
   libraryDependencies ++= {
-    if (isScala3.value) Seq.empty
+    if (ScalaArtifacts.isScala3(scalaVersion.value)) Seq.empty
     else Seq(
       compilerPlugin("org.typelevel" % "kind-projector" % kindProjectorV cross CrossVersion.full),
       compilerPlugin("com.olegpy" %% "better-monadic-for" % betterMonadicForV)
     )
   },
   scalacOptions ++= {
-    if (isScala3.value) Seq("-source:3.0-migration")
+    if (ScalaArtifacts.isScala3(scalaVersion.value)) Seq("-source:3.0-migration")
     else Seq()
   },
   Compile / doc / sources := {
     val old = (Compile / doc / sources).value
-    if (isScala3.value)
+    if (ScalaArtifacts.isScala3(scalaVersion.value))
       Seq()
     else
       old
@@ -216,12 +212,11 @@ lazy val mimaSettings = {
   lazy val extraVersions: Set[String] = Set()
 
   Seq(
-    isScala3 := scalaBinaryVersion.value == "3",
     mimaFailOnNoPrevious := false,
     mimaFailOnProblem := mimaVersions(version.value).toList.nonEmpty,
     mimaPreviousArtifacts := (mimaVersions(version.value) ++ extraVersions).diff(excludedVersions)
       .filterNot(Function.const(scalaVersion.value == "2.13.0-M5"))
-      .filterNot(Function.const(isScala3.value))
+      .filterNot(Function.const(ScalaArtifacts.isScala3(scalaVersion.value)))
       .map { v =>
         val moduleN = moduleName.value + "_" + scalaBinaryVersion.value.toString
         organization.value % moduleN % v
