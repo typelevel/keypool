@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Java and Scala
-        uses: olafurpg/setup-scala@v12
+        uses: olafurpg/setup-scala@v13
         with:
           java-version: ${{ matrix.java }}
 
@@ -69,12 +69,12 @@ jobs:
           node-version: 14
 
       - name: Check that workflows are up to date
-        run: sbt --client '++${{ matrix.scala }}; githubWorkflowCheck'
+        run: sbt ++${{ matrix.scala }} githubWorkflowCheck
 
-      - run: sbt --client '++${{ matrix.scala }}; core${{ matrix.platform }}/test; mimaReportBinaryIssues'
+      - run: sbt ++${{ matrix.scala }} 'core${{ matrix.platform }}/test' mimaReportBinaryIssues
 
       - if: matrix.scala == '2.13.6' && matrix.platform == 'JVM'
-        run: sbt --client '++${{ matrix.scala }}; docs/makeMicrosite'
+        run: sbt ++${{ matrix.scala }} docs/makeMicrosite
 
   publish:
     name: Publish Artifacts
@@ -93,7 +93,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Java and Scala
-        uses: olafurpg/setup-scala@v12
+        uses: olafurpg/setup-scala@v13
         with:
           java-version: ${{ matrix.java }}
 
@@ -127,7 +127,7 @@ jobs:
           PGP_SECRET: ${{ secrets.PGP_SECRET }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-        run: sbt --client '++${{ matrix.scala }}; ci-release'
+        run: sbt ++${{ matrix.scala }} ci-release
 
       - name: Publish microsite
-        run: sbt --client '++${{ matrix.scala }}; ++2.13.6; docs/publishMicrosite'
+        run: sbt ++${{ matrix.scala }} ++2.13.6 docs/publishMicrosite
