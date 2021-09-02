@@ -1,4 +1,4 @@
-# keypool - A Keyed Pool for Scala  [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.typelevel/keypool_2.13/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.typelevel/keypool_2.13)
+# keypool - A Keyed Pool for Scala  [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.typelevel/keypool_2.13/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.typelevel/keypool_2.13) ![Continuous Integration](https://github.com/typelevel/keypool/workflows/Continuous%20Integration/badge.svg)
 
 ## [Head on over to the microsite](https://typelevel.github.io/keypool)
 
