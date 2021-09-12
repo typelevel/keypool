@@ -7,8 +7,7 @@ import cats.effect.kernel._
 import scala.concurrent.duration._
 
 final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
-    val kpCreate: A => F[B],
-    val kpDestroy: B => F[Unit],
+    val kpRes: A => Resource[F, B],
     val kpDefaultReuseState: Reusable,
     val idleTimeAllowedInPool: Duration,
     val kpMaxPerKey: A => Int,
@@ -16,16 +15,14 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
     val onReaperException: Throwable => F[Unit]
 ) {
   private def copy(
-      kpCreate: A => F[B] = this.kpCreate,
-      kpDestroy: B => F[Unit] = this.kpDestroy,
+      kpRes: A => Resource[F, B] = this.kpRes,
       kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
       idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
       kpMaxPerKey: A => Int = this.kpMaxPerKey,
       kpMaxTotal: Int = this.kpMaxTotal,
       onReaperException: Throwable => F[Unit] = this.onReaperException
   ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
-    kpCreate,
-    kpDestroy,
+    kpRes,
     kpDefaultReuseState,
     idleTimeAllowedInPool,
     kpMaxPerKey,
@@ -34,10 +31,12 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
   )
 
   def doOnCreate(f: B => F[Unit]): KeyPoolBuilder[F, A, B] =
-    copy(kpCreate = { (k: A) => this.kpCreate(k).flatMap(v => f(v).attempt.void.as(v)) })
+    copy(kpRes = { (k: A) => this.kpRes(k).flatMap(v => Resource.eval(f(v).attempt.void.as(v))) })
 
   def doOnDestroy(f: B => F[Unit]): KeyPoolBuilder[F, A, B] =
-    copy(kpDestroy = { (r: B) => f(r).attempt.void >> this.kpDestroy(r) })
+    copy(kpRes = { (k: A) =>
+      this.kpRes(k).flatMap(v => Resource.make(Applicative[F].unit)(_ => f(v).attempt.void).as(v))
+    })
 
   def withDefaultReuseState(defaultReuseState: Reusable) =
     copy(kpDefaultReuseState = defaultReuseState)
@@ -59,22 +58,19 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       fa.onError { case e => onReaperException(e) }.attempt >> keepRunning(fa)
     for {
       kpVar <- Resource.make(
-        Ref[F].of[PoolMap[A, B]](PoolMap.open(0, Map.empty[A, PoolList[B]]))
-      )(kpVar => KeyPool.destroy(kpDestroy, kpVar))
+        Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
+      )(kpVar => KeyPool.destroy(kpVar))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
           Resource.make(
-            Concurrent[F].start(
-              keepRunning(KeyPool.reap(kpDestroy, nanos, kpVar, onReaperException))
-            )
+            Concurrent[F].start(keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)))
           )(_.cancel)
         case _ =>
           Applicative[Resource[F, *]].unit
       }
     } yield new KeyPool.KeyPoolConcrete(
-      kpCreate,
-      kpDestroy,
+      kpRes,
       kpDefaultReuseState,
       kpMaxPerKey,
       kpMaxTotal,
@@ -89,8 +85,18 @@ object KeyPoolBuilder {
       create: A => F[B],
       destroy: B => F[Unit]
   ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
-    create,
-    destroy,
+    a => Resource.make(create(a))(destroy),
+    Defaults.defaultReuseState,
+    Defaults.idleTimeAllowedInPool,
+    Defaults.maxPerKey,
+    Defaults.maxTotal,
+    Defaults.onReaperException[F]
+  )
+
+  def apply[F[_]: Temporal, A, B](
+      res: A => Resource[F, B]
+  ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
+    res,
     Defaults.defaultReuseState,
     Defaults.idleTimeAllowedInPool,
     Defaults.maxPerKey,
