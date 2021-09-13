@@ -12,8 +12,8 @@ private[keypool] sealed trait PoolList[A] extends Product with Serializable {
 private[keypool] object PoolList {
   def fromList[A](l: List[(FiniteDuration, A)]): Option[PoolList[A]] = l match {
     case Nil => None
-    case (t, a):: Nil => Some(One(a, t))
-    case list => {
+    case (t, a) :: Nil => Some(One(a, t))
+    case list =>
       def go(l: List[(FiniteDuration, A)]): (Int, PoolList[A]) = l match {
         case Nil => throw new Throwable("PoolList.fromList Nil")
         case (t, a) :: Nil => (2, One(a, t))
@@ -23,16 +23,20 @@ private[keypool] object PoolList {
           (i_, Cons(a, i, t, rest_))
       }
       Some(go(list)._2)
-    }
   }
 
-  implicit val poolListFoldable: Foldable[PoolList] = new Foldable[PoolList]{
-    def foldLeft[A, B](fa: PoolList[A],b: B)(f: (B, A) => B): B =
+  implicit val poolListFoldable: Foldable[PoolList] = new Foldable[PoolList] {
+    def foldLeft[A, B](fa: PoolList[A], b: B)(f: (B, A) => B): B =
       Foldable[List].foldLeft(fa.toList.map(_._2), b)(f)
-    def foldRight[A, B](fa: PoolList[A],lb: Eval[B])(f: (A, Eval[B]) => Eval[B]): Eval[B] =
+    def foldRight[A, B](fa: PoolList[A], lb: Eval[B])(f: (A, Eval[B]) => Eval[B]): Eval[B] =
       Foldable[List].foldRight(fa.toList.map(_._2), lb)(f)
   }
 }
 
 private[keypool] final case class One[A](a: A, created: FiniteDuration) extends PoolList[A]
-private[keypool] final case class Cons[A](a: A, length: Int, created: FiniteDuration, xs: PoolList[A]) extends PoolList[A]
+private[keypool] final case class Cons[A](
+    a: A,
+    length: Int,
+    created: FiniteDuration,
+    xs: PoolList[A]
+) extends PoolList[A]
