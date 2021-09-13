@@ -31,8 +31,15 @@ ThisBuild / githubWorkflowBuildPreamble ++=
   rubySetupSteps(Some(Scala213Cond + " && " + JVMCond))
 
 ThisBuild / githubWorkflowBuild := Seq(
-  WorkflowStep.Sbt(List("core${{ matrix.platform }}/test", "mimaReportBinaryIssues")),
-  WorkflowStep.Sbt(List("docs/makeMicrosite"), cond = Some(Scala213Cond + " && " + JVMCond))
+  WorkflowStep
+    .Sbt(List("scalafmtCheckAll", "scalafmtSbtCheck"), name = Some("Check formatting")),
+  WorkflowStep.Sbt(List("mimaReportBinaryIssues"), name = Some("Check binary issues")),
+  WorkflowStep.Sbt(List("core${{ matrix.platform }}/test"), name = Some("Compile and run tests")),
+  WorkflowStep.Sbt(
+    List("docs/makeMicrosite"),
+    cond = Some(Scala213Cond + " && " + JVMCond),
+    name = Some("Build the Microsite")
+  )
 )
 
 ThisBuild / githubWorkflowTargetBranches := List("*", "series/*")
