@@ -18,24 +18,29 @@ def rubySetupSteps(cond: Option[String]) = Seq(
     UseRef.Public("ruby", "setup-ruby", "v1"),
     name = Some("Setup Ruby"),
     params = Map("ruby-version" -> "2.6.0"),
-    cond = cond),
-
+    cond = cond
+  ),
   WorkflowStep.Run(
-    List(
-      "gem install saas",
-      "gem install jekyll -v 3.2.1"),
+    List("gem install saas", "gem install jekyll -v 3.2.1"),
     name = Some("Install microsite dependencies"),
-    cond = cond))
+    cond = cond
+  )
+)
 
 ThisBuild / githubWorkflowBuildPreamble ++=
   rubySetupSteps(Some(Scala213Cond + " && " + JVMCond))
 
 ThisBuild / githubWorkflowBuild := Seq(
-  WorkflowStep.Sbt(List("core${{ matrix.platform }}/test", "mimaReportBinaryIssues")),
-
+  WorkflowStep
+    .Sbt(List("scalafmtCheckAll", "scalafmtSbtCheck"), name = Some("Check formatting")),
+  WorkflowStep.Sbt(List("mimaReportBinaryIssues"), name = Some("Check binary issues")),
+  WorkflowStep.Sbt(List("core${{ matrix.platform }}/test"), name = Some("Compile and run tests")),
   WorkflowStep.Sbt(
     List("docs/makeMicrosite"),
-    cond = Some(Scala213Cond + " && " + JVMCond)))
+    cond = Some(Scala213Cond + " && " + JVMCond),
+    name = Some("Build the Microsite")
+  )
+)
 
 ThisBuild / githubWorkflowTargetBranches := List("*", "series/*")
 ThisBuild / githubWorkflowTargetTags ++= Seq("v*")
@@ -49,10 +54,10 @@ ThisBuild / githubWorkflowBuildPreamble +=
     UseRef.Public("actions", "setup-node", "v2.1.5"),
     name = Some("Setup NodeJS v14 LTS"),
     params = Map("node-version" -> "14"),
-    cond = Some(JSCond))
+    cond = Some(JSCond)
+  )
 ThisBuild / githubWorkflowPublishPreamble ++=
   WorkflowStep.Use(UseRef.Public("olafurpg", "setup-gpg", "v3")) +: rubySetupSteps(None)
-
 
 ThisBuild / githubWorkflowPublish := Seq(
   WorkflowStep.Sbt(
@@ -62,16 +67,17 @@ ThisBuild / githubWorkflowPublish := Seq(
       "PGP_PASSPHRASE" -> "${{ secrets.PGP_PASSPHRASE }}",
       "PGP_SECRET" -> "${{ secrets.PGP_SECRET }}",
       "SONATYPE_PASSWORD" -> "${{ secrets.SONATYPE_PASSWORD }}",
-      "SONATYPE_USERNAME" -> "${{ secrets.SONATYPE_USERNAME }}")),
-
+      "SONATYPE_USERNAME" -> "${{ secrets.SONATYPE_USERNAME }}"
+    )
+  ),
   WorkflowStep.Sbt(
     List(s"++$Scala213", "docs/publishMicrosite"),
     name = Some("Publish microsite")
   )
 )
 
-
-lazy val `keypool` = project.in(file("."))
+lazy val `keypool` = project
+  .in(file("."))
   .disablePlugins(MimaPlugin)
   .settings(commonSettings, releaseSettings, skipOnPublishSettings)
   .aggregate(core.jvm, core.js)
@@ -85,7 +91,8 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
     name := "keypool"
   )
 
-lazy val docs = project.in(file("site"))
+lazy val docs = project
+  .in(file("site"))
   .settings(commonSettings, skipOnPublishSettings, micrositeSettings)
   .dependsOn(core.jvm)
   .enablePlugins(MicrositesPlugin)
@@ -106,20 +113,21 @@ val betterMonadicForV = "0.3.1"
 // General Settings
 lazy val commonSettings = Seq(
   organization := "org.typelevel",
-
   testFrameworks += new TestFramework("munit.Framework"),
-
   Compile / doc / scalacOptions ++= Seq(
-      "-groups",
-      "-sourcepath", (LocalRootProject / baseDirectory).value.getAbsolutePath,
-      "-doc-source-url", "https://github.com/typelevel/keypool/blob/v" + version.value + "€{FILE_PATH}.scala"
+    "-groups",
+    "-sourcepath",
+    (LocalRootProject / baseDirectory).value.getAbsolutePath,
+    "-doc-source-url",
+    "https://github.com/typelevel/keypool/blob/v" + version.value + "€{FILE_PATH}.scala"
   ),
   libraryDependencies ++= {
     if (ScalaArtifacts.isScala3(scalaVersion.value)) Seq.empty
-    else Seq(
-      compilerPlugin("org.typelevel" % "kind-projector" % kindProjectorV cross CrossVersion.full),
-      compilerPlugin("com.olegpy" %% "better-monadic-for" % betterMonadicForV)
-    )
+    else
+      Seq(
+        compilerPlugin("org.typelevel" % "kind-projector" % kindProjectorV cross CrossVersion.full),
+        compilerPlugin("com.olegpy" %% "better-monadic-for" % betterMonadicForV)
+      )
   },
   scalacOptions ++= {
     if (ScalaArtifacts.isScala3(scalaVersion.value)) Seq("-source:3.0-migration")
@@ -133,10 +141,10 @@ lazy val commonSettings = Seq(
       old
   },
   libraryDependencies ++= Seq(
-    "org.typelevel"               %%% "cats-core"                  % catsV,
-    "org.typelevel"               %%% "cats-effect-kernel"         % catsEffectV,
-    "org.typelevel"               %%% "cats-effect-std"            % catsEffectV           % Test,
-    "org.typelevel"               %%% "munit-cats-effect-3"        % munitCatsEffectV      % Test
+    "org.typelevel" %%% "cats-core"           % catsV,
+    "org.typelevel" %%% "cats-effect-kernel"  % catsEffectV,
+    "org.typelevel" %%% "cats-effect-std"     % catsEffectV      % Test,
+    "org.typelevel" %%% "munit-cats-effect-3" % munitCatsEffectV % Test
   )
 )
 
@@ -157,13 +165,14 @@ lazy val releaseSettings = {
     },
     pomExtra := {
       <developers>
-        {for ((username, name) <- contributors) yield
-        <developer>
+        {
+        for ((username, name) <- contributors)
+          yield <developer>
           <id>{username}</id>
           <name>{name}</name>
           <url>http://github.com/{username}</url>
         </developer>
-        }
+      }
       </developers>
     }
   )
@@ -175,7 +184,7 @@ lazy val mimaSettings = {
     val majorVersions: List[Int] =
       if (major == 0 && minor == 0) List.empty[Int] // If 0.0.x do not check MiMa
       else List(major)
-    val minorVersions : List[Int] =
+    val minorVersions: List[Int] =
       if (major >= 1) Range(0, minor).inclusive.toList
       else List(minor)
     def patchVersions(currentMinVersion: Int): List[Int] =
@@ -195,7 +204,7 @@ lazy val mimaSettings = {
     VersionNumber(version) match {
       case VersionNumber(Seq(major, minor, patch, _*), _, _) if patch.toInt > 0 =>
         semverBinCompatVersions(major.toInt, minor.toInt, patch.toInt)
-          .map{case (maj, min, pat) => maj.toString + "." + min.toString + "." + pat.toString}
+          .map { case (maj, min, pat) => maj.toString + "." + min.toString + "." + pat.toString }
       case _ =>
         Set.empty[String]
     }
@@ -214,7 +223,8 @@ lazy val mimaSettings = {
   Seq(
     mimaFailOnNoPrevious := false,
     mimaFailOnProblem := mimaVersions(version.value).toList.nonEmpty,
-    mimaPreviousArtifacts := (mimaVersions(version.value) ++ extraVersions).diff(excludedVersions)
+    mimaPreviousArtifacts := (mimaVersions(version.value) ++ extraVersions)
+      .diff(excludedVersions)
       .filterNot(Function.const(scalaVersion.value == "2.13.0-M5"))
       .filterNot(Function.const(ScalaArtifacts.isScala3(scalaVersion.value)))
       .map { v =>
@@ -256,9 +266,21 @@ lazy val micrositeSettings = {
     micrositePushSiteWith := GitHub4s,
     micrositeGithubToken := sys.env.get("GITHUB_TOKEN"),
     micrositeExtraMdFiles := Map(
-        file("CHANGELOG.md")        -> ExtraMdFileConfig("changelog.md", "page", Map("title" -> "changelog", "section" -> "changelog", "position" -> "100")),
-        file("CODE_OF_CONDUCT.md")  -> ExtraMdFileConfig("code-of-conduct.md",   "page", Map("title" -> "code of conduct",   "section" -> "code of conduct",   "position" -> "101")),
-        file("LICENSE")             -> ExtraMdFileConfig("license.md",   "page", Map("title" -> "license",   "section" -> "license",   "position" -> "102"))
+      file("CHANGELOG.md") -> ExtraMdFileConfig(
+        "changelog.md",
+        "page",
+        Map("title" -> "changelog", "section" -> "changelog", "position" -> "100")
+      ),
+      file("CODE_OF_CONDUCT.md") -> ExtraMdFileConfig(
+        "code-of-conduct.md",
+        "page",
+        Map("title" -> "code of conduct", "section" -> "code of conduct", "position" -> "101")
+      ),
+      file("LICENSE") -> ExtraMdFileConfig(
+        "license.md",
+        "page",
+        Map("title" -> "license", "section" -> "license", "position" -> "102")
+      )
     )
   )
 }
