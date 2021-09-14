@@ -6,6 +6,7 @@ import cats.syntax.all._
 import cats.effect.kernel._
 import scala.concurrent.duration._
 
+@deprecated("use KeyPool.Builder", "0.4.7")
 final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
     val kpCreate: A => F[B],
     val kpDestroy: B => F[Unit],
@@ -82,6 +83,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
 }
 
 object KeyPoolBuilder {
+  @deprecated("use KeyPool.Builder.apply", "0.4.7")
   def apply[F[_]: Temporal, A, B](
       create: A => F[B],
       destroy: B => F[Unit]
