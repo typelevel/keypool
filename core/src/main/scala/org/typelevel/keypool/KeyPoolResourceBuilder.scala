@@ -6,9 +6,8 @@ import cats.syntax.all._
 import cats.effect.kernel._
 import scala.concurrent.duration._
 
-final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
-    val kpCreate: A => F[B],
-    val kpDestroy: B => F[Unit],
+final class KeyPoolResourceBuilder[F[_]: Temporal, A, B] private (
+    val kpRes: A => Resource[F, B],
     val kpDefaultReuseState: Reusable,
     val idleTimeAllowedInPool: Duration,
     val kpMaxPerKey: A => Int,
@@ -16,16 +15,14 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
     val onReaperException: Throwable => F[Unit]
 ) {
   private def copy(
-      kpCreate: A => F[B] = this.kpCreate,
-      kpDestroy: B => F[Unit] = this.kpDestroy,
+      kpRes: A => Resource[F, B] = this.kpRes,
       kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
       idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
       kpMaxPerKey: A => Int = this.kpMaxPerKey,
       kpMaxTotal: Int = this.kpMaxTotal,
       onReaperException: Throwable => F[Unit] = this.onReaperException
-  ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
-    kpCreate,
-    kpDestroy,
+  ): KeyPoolResourceBuilder[F, A, B] = new KeyPoolResourceBuilder[F, A, B](
+    kpRes,
     kpDefaultReuseState,
     idleTimeAllowedInPool,
     kpMaxPerKey,
@@ -33,11 +30,13 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
     onReaperException
   )
 
-  def doOnCreate(f: B => F[Unit]): KeyPoolBuilder[F, A, B] =
-    copy(kpCreate = { (k: A) => this.kpCreate(k).flatMap(v => f(v).attempt.void.as(v)) })
+  def doOnCreate(f: B => F[Unit]): KeyPoolResourceBuilder[F, A, B] =
+    copy(kpRes = { (k: A) => this.kpRes(k).flatMap(v => Resource.eval(f(v).attempt.void.as(v))) })
 
-  def doOnDestroy(f: B => F[Unit]): KeyPoolBuilder[F, A, B] =
-    copy(kpDestroy = { (r: B) => f(r).attempt.void >> this.kpDestroy(r) })
+  def doOnDestroy(f: B => F[Unit]): KeyPoolResourceBuilder[F, A, B] =
+    copy(kpRes = { (k: A) =>
+      this.kpRes(k).flatMap(v => Resource.make(Applicative[F].unit)(_ => f(v).attempt.void).as(v))
+    })
 
   def withDefaultReuseState(defaultReuseState: Reusable) =
     copy(kpDefaultReuseState = defaultReuseState)
@@ -45,10 +44,10 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
   def withIdleTimeAllowedInPool(duration: Duration) =
     copy(idleTimeAllowedInPool = duration)
 
-  def withMaxPerKey(f: A => Int): KeyPoolBuilder[F, A, B] =
+  def withMaxPerKey(f: A => Int): KeyPoolResourceBuilder[F, A, B] =
     copy(kpMaxPerKey = f)
 
-  def withMaxTotal(total: Int): KeyPoolBuilder[F, A, B] =
+  def withMaxTotal(total: Int): KeyPoolResourceBuilder[F, A, B] =
     copy(kpMaxTotal = total)
 
   def withOnReaperException(f: Throwable => F[Unit]) =
@@ -71,7 +70,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
           Applicative[Resource[F, *]].unit
       }
     } yield new KeyPool.KeyPoolConcrete(
-      (a: A) => Resource.make[F, B](kpCreate(a))(kpDestroy),
+      kpRes,
       kpDefaultReuseState,
       kpMaxPerKey,
       kpMaxTotal,
@@ -81,13 +80,11 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
 
 }
 
-object KeyPoolBuilder {
+object KeyPoolResourceBuilder {
   def apply[F[_]: Temporal, A, B](
-      create: A => F[B],
-      destroy: B => F[Unit]
-  ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
-    create,
-    destroy,
+      res: A => Resource[F, B]
+  ): KeyPoolResourceBuilder[F, A, B] = new KeyPoolResourceBuilder[F, A, B](
+    res,
     Defaults.defaultReuseState,
     Defaults.idleTimeAllowedInPool,
     Defaults.maxPerKey,
