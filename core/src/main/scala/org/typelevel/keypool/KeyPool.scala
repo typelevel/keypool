@@ -374,14 +374,8 @@ object KeyPool {
     def apply[F[_]: Temporal, A, B](
         create: A => F[B],
         destroy: B => F[Unit]
-    ): Builder[F, A, B] = new Builder[F, A, B](
-      a => Resource.make(create(a))(destroy),
-      Defaults.defaultReuseState,
-      Defaults.idleTimeAllowedInPool,
-      Defaults.maxPerKey,
-      Defaults.maxTotal,
-      Defaults.onReaperException[F]
-    )
+    ): Builder[F, A, B] =
+      apply(a => Resource.make(create(a))(destroy))
 
     private object Defaults {
       val defaultReuseState = Reusable.Reuse
