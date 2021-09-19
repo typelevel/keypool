@@ -6,6 +6,7 @@ import cats.syntax.all._
 import cats.effect.kernel._
 import scala.concurrent.duration._
 
+@deprecated("use KeyPool.Builder", "0.4.7")
 final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
     val kpCreate: A => F[B],
     val kpDestroy: B => F[Unit],
@@ -59,22 +60,19 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       fa.onError { case e => onReaperException(e) }.attempt >> keepRunning(fa)
     for {
       kpVar <- Resource.make(
-        Ref[F].of[PoolMap[A, B]](PoolMap.open(0, Map.empty[A, PoolList[B]]))
-      )(kpVar => KeyPool.destroy(kpDestroy, kpVar))
+        Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
+      )(kpVar => KeyPool.destroy(kpVar))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
           Resource.make(
-            Concurrent[F].start(
-              keepRunning(KeyPool.reap(kpDestroy, nanos, kpVar, onReaperException))
-            )
+            Concurrent[F].start(keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)))
           )(_.cancel)
         case _ =>
           Applicative[Resource[F, *]].unit
       }
     } yield new KeyPool.KeyPoolConcrete(
-      kpCreate,
-      kpDestroy,
+      (a: A) => Resource.make[F, B](kpCreate(a))(kpDestroy),
       kpDefaultReuseState,
       kpMaxPerKey,
       kpMaxTotal,
@@ -85,6 +83,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
 }
 
 object KeyPoolBuilder {
+  @deprecated("use KeyPool.Builder.apply", "0.4.7")
   def apply[F[_]: Temporal, A, B](
       create: A => F[B],
       destroy: B => F[Unit]

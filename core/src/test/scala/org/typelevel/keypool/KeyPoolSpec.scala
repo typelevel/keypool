@@ -13,10 +13,12 @@ class KeypoolSpec extends CatsEffectSuite {
   test("Keep Resources marked to be kept") {
     def nothing(ref: Ref[IO, Int]): IO[Unit] =
       ref.get.void
-    KeyPoolBuilder(
-      (i: Int) => Ref.of[IO, Int](i),
-      nothing
-    ).withDefaultReuseState(Reusable.Reuse)
+    KeyPool
+      .Builder(
+        (i: Int) => Ref.of[IO, Int](i),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxPerKey(Function.const(10))
       .withMaxTotal(10)
@@ -33,10 +35,12 @@ class KeypoolSpec extends CatsEffectSuite {
   test("Delete Resources marked to be deleted") {
     def nothing(ref: Ref[IO, Int]): IO[Unit] =
       ref.get.void
-    KeyPoolBuilder(
-      (i: Int) => Ref.of[IO, Int](i),
-      nothing
-    ).withDefaultReuseState(Reusable.DontReuse)
+    KeyPool
+      .Builder(
+        (i: Int) => Ref.of[IO, Int](i),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.DontReuse)
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxPerKey(Function.const(10))
       .withMaxTotal(10)
@@ -53,10 +57,12 @@ class KeypoolSpec extends CatsEffectSuite {
   test("Delete Resource when pool is full") {
     def nothing(ref: Ref[IO, Int]): IO[Unit] =
       ref.get.void
-    KeyPoolBuilder(
-      (i: Int) => Ref.of[IO, Int](i),
-      nothing
-    ).withDefaultReuseState(Reusable.Reuse)
+    KeyPool
+      .Builder(
+        (i: Int) => Ref.of[IO, Int](i),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxPerKey(Function.const(1))
       .withMaxTotal(1)
@@ -76,10 +82,12 @@ class KeypoolSpec extends CatsEffectSuite {
   test("Used Resource Cleaned Up By Reaper") {
     def nothing(ref: Ref[IO, Int]): IO[Unit] =
       ref.get.void
-    KeyPoolBuilder(
-      (i: Int) => Ref.of[IO, Int](i),
-      nothing
-    ).withDefaultReuseState(Reusable.Reuse)
+    KeyPool
+      .Builder(
+        (i: Int) => Ref.of[IO, Int](i),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(Duration.Zero)
       .withMaxPerKey(Function.const(1))
       .withMaxTotal(1)
@@ -102,10 +110,12 @@ class KeypoolSpec extends CatsEffectSuite {
     def nothing(ref: Ref[IO, Int]): IO[Unit] =
       ref.get.void
 
-    KeyPoolBuilder(
-      (i: Int) => Ref.of[IO, Int](i),
-      nothing
-    ).withDefaultReuseState(Reusable.Reuse)
+    KeyPool
+      .Builder(
+        (i: Int) => Ref.of[IO, Int](i),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(30.seconds)
       .withMaxPerKey(Function.const(1))
       .withMaxTotal(1)
