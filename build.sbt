@@ -121,6 +121,7 @@ lazy val commonSettings = Seq(
     "-doc-source-url",
     "https://github.com/typelevel/keypool/blob/v" + version.value + "€{FILE_PATH}.scala"
   ),
+  Test / parallelExecution := false,
   libraryDependencies ++= {
     if (ScalaArtifacts.isScala3(scalaVersion.value)) Seq.empty
     else

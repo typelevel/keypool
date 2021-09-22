@@ -285,7 +285,7 @@ object KeyPool {
     } yield new Managed(resource._1, optR.isDefined, releasedState)
   }
 
-  final class Builder[F[_]: Temporal, A, B] private (
+  final class Builder[F[_]: Temporal, A, B] private[keypool] (
       val kpRes: A => Resource[F, B],
       val kpDefaultReuseState: Reusable,
       val idleTimeAllowedInPool: Duration,
