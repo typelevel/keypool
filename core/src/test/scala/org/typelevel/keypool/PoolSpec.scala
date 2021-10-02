@@ -26,7 +26,7 @@ class PoolSpec extends CatsEffectSuite {
           .use(_ => IO.unit) >>
           pool.state
       )
-      .map(a => assert(a === 1))
+      .map(a => assert(a.total === 1))
   }
 
   test("Delete Resources marked to be deleted") {
@@ -45,7 +45,7 @@ class PoolSpec extends CatsEffectSuite {
           .use(_ => IO.unit) >>
           pool.state
       )
-      .map(a => assert(a === 0))
+      .map(a => assert(a.total === 0))
   }
 
   test("Delete Resource when pool is full") {
@@ -66,7 +66,7 @@ class PoolSpec extends CatsEffectSuite {
         (action, action).parMapN { case (_, _) => IO.unit } >>
           pool.state
       }
-      .map(a => assert(a === 1))
+      .map(a => assert(a.total === 1))
   }
 
   test("Used Resource Cleaned Up By Reaper") {
@@ -88,7 +88,7 @@ class PoolSpec extends CatsEffectSuite {
           init <- pool.state
           _ <- Temporal[IO].sleep(6.seconds)
           later <- pool.state
-        } yield assert(init === 1 && later === 0)
+        } yield assert(init.total === 1 && later.total === 0)
       }
   }
 
@@ -111,7 +111,7 @@ class PoolSpec extends CatsEffectSuite {
           init <- pool.state
           _ <- Temporal[IO].sleep(6.seconds)
           later <- pool.state
-        } yield assert(init === 1 && later === 1)
+        } yield assert(init.total === 1 && later.total === 1)
       }
   }
 

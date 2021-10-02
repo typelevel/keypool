@@ -27,10 +27,8 @@ trait Pool[F[_], B] {
 
   /**
    * The current state of the pool.
-   *
-   * The value is the total number of resources currently in the pool
    */
-  def state: F[Int]
+  def state: F[PoolStats]
 }
 
 object Pool {
@@ -46,7 +44,7 @@ object Pool {
       new Pool[F, B] {
         def take: Resource[F, Managed[F, B]] =
           fa.take.map(_.map(f))
-        def state: F[Int] =
+        def state: F[PoolStats] =
           fa.state
       }
   }
@@ -106,7 +104,7 @@ object Pool {
       toKeyPoolBuilder.build.map { inner =>
         new Pool[F, B] {
           def take: Resource[F, Managed[F, B]] = inner.take(())
-          def state: F[Int] = inner.state.map(_._1)
+          def state: F[PoolStats] = inner.state.map(s => new PoolStats(s._1))
         }
       }
     }
