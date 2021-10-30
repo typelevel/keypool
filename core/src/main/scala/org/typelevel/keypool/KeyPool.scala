@@ -126,7 +126,7 @@ object KeyPool {
           time + idleTimeAllowedInPoolNanos >= now // Time value is alright inside the KeyPool in nanos.
 
       // Probably a more idiomatic way to do this in scala
-      //([(key, PoolList resource)] -> [(key, PoolList resource)]) ->
+      // ([(key, PoolList resource)] -> [(key, PoolList resource)]) ->
       // ([resource] -> [resource]) ->
       // [(key, PoolList resource)] ->
       // (Map key (PoolList resource), [resource])
