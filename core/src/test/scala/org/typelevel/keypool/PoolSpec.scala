@@ -115,6 +115,46 @@ class PoolSpec extends CatsEffectSuite {
       }
   }
 
+  // see https://github.com/typelevel/keypool/issues/291
+  test("Borrowed Resource destroyed during cleanup") {
+    val pool = Pool
+      .Builder(
+        IO.ref(true),
+        (r: Ref[IO, Boolean]) => r.set(false)
+      )
+      .build
+
+    def escapedResource(outerAwait: Deferred[IO, Unit]): IO[FiberIO[(Boolean, Boolean)]] =
+      pool.use { p =>
+        def job(innerAwait: Deferred[IO, Unit]): IO[(Boolean, Boolean)] =
+          p.take.use { managed =>
+            val value = managed.value
+
+            for {
+              status1 <- value.get
+              _ <- innerAwait.complete(())
+              _ <- outerAwait.get
+              status2 <- value.get
+            } yield (status1, status2)
+          }
+
+        for {
+          await <- IO.deferred[Unit]
+          fiber <- job(await).start
+          _ <- await.get // make sure the first part happens inside of the open pool
+        } yield fiber
+      }
+
+    for {
+      await <- IO.deferred[Unit]
+      fiber <- escapedResource(await)
+      _ <- await.complete(()) // pool is closed and a fiber can continue its execution
+      outcome <- fiber.join
+      result <- outcome.embedNever
+      (status1, status2) = result
+    } yield assert(status1 === true && status2 === false)
+  }
+
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void
 }
