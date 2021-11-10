@@ -280,40 +280,25 @@ object KeyPool {
           PoolMap.open(idleCount, update(borrowed), m)
       }
 
-    def allocate(resourceOpt: Option[(B, F[Unit])]): F[((B, F[Unit]), Option[Unique.Token])] =
-      resourceOpt match {
-        case Some(allocated) =>
-          Applicative[F].pure((allocated, None))
-
-        case None =>
-          for {
-            token <- Temporal[F].unique
-            r <- kp.kpRes(k).allocated
-            _ <- kp.kpVar.update(pm => updateBorrowed(pm, _ + (token -> r)))
-          } yield (r, Some(token))
-      }
-
-    def release(
-        releasedState: Ref[F, Reusable]
-    )(res: ((B, F[Unit]), Option[Unique.Token])): F[Unit] = {
-      val (resource, tokenOpt) = res
-
-      for {
-        reusable <- releasedState.get
-        out <- reusable match {
-          case Reusable.Reuse => put(kp, k, resource._1, resource._2).attempt.void
-          case Reusable.DontReuse => resource._2.attempt.void
-        }
-        _ <- tokenOpt.fold(Temporal[F].unit)(t => kp.kpVar.update(pm => updateBorrowed(pm, _ - t)))
-      } yield out
-    }
-
     for {
       optR <- Resource.eval(kp.kpVar.modify(go))
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
       token <- Resource.eval(Temporal[F].unique)
-      resource <- Resource.make(allocate(optR))(release(releasedState))
-    } yield new Managed(resource._1._1, optR.isDefined, releasedState)
+      resource <- Resource.make {
+        optR
+          .fold(kp.kpRes(k).allocated)(Applicative[F].pure)
+          .flatTap(r => kp.kpVar.update(pm => updateBorrowed(pm, _ + (token -> r))))
+      } { resource =>
+        for {
+          reusable <- releasedState.get
+          out <- reusable match {
+            case Reusable.Reuse => put(kp, k, resource._1, resource._2).attempt.void
+            case Reusable.DontReuse => resource._2.attempt.void
+          }
+          _ <- kp.kpVar.update(pm => updateBorrowed(pm, _ - token))
+        } yield out
+      }
+    } yield new Managed(resource._1, optR.isDefined, releasedState)
   }
 
   final class Builder[F[_]: Temporal, A, B] private[keypool] (
