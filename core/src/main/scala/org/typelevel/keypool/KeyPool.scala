@@ -124,15 +124,18 @@ object KeyPool {
       m <- kpVar.getAndSet(PoolMap.closed[A, (B, ExitCase => F[Unit])])
       _ <- m match {
         case PoolClosed() => Applicative[F].unit
-        case PoolOpen(_, m2) =>
-          m2.toList.traverse_ { case (_, pl) =>
-            pl.toList
-              .traverse_ { case (_, r) =>
+        case PoolOpen(_, borrowed, m2) =>
+          borrowed.values.toList.traverse_ { case (_, release) =>
+            metrics.resourceDestroyed(Metrics.DestructionReason.PoolClosed) >>
+              release(exit).attempt.void
+          } >>
+            m2.toList.traverse_ { case (_, pl) =>
+              pl.toList.traverse_ { case (_, (_, release)) =>
                 metrics.idleDec >>
                   metrics.resourceDestroyed(Metrics.DestructionReason.PoolClosed) >>
-                  r._2(exit).attempt.void
+                  release(exit).attempt.void
               }
-          }
+            }
       }
     } yield ()
 
@@ -153,7 +156,7 @@ object KeyPool {
         now: FiniteDuration,
         idleCount: Int,
         m: Map[A, PoolList[(B, ExitCase => F[Unit])]]
-    ): (PoolMap[A, (B, ExitCase => F[Unit])], List[(A, (B, ExitCase => F[Unit]))]) = {
+    ): (Int, Map[A, PoolList[(B, ExitCase => F[Unit])]], List[(A, (B, ExitCase => F[Unit]))]) = {
       val isNotStale: FiniteDuration => Boolean =
         time =>
           time + idleTimeAllowedInPoolNanos >= now // Time value is alright inside the KeyPool in nanos.
@@ -194,7 +197,7 @@ object KeyPool {
       // May be able to use Span eventually
       val (toKeep, toDestroy) = findStale_(identity, identity, m.toList)
       val idleCount_ = idleCount - toDestroy.length
-      (PoolMap.open(idleCount_, toKeep), toDestroy)
+      (idleCount_, toKeep, toDestroy)
     }
 
     val sleep = Temporal[F].sleep(durationBetweenEvictionRuns).void
@@ -204,13 +207,13 @@ object KeyPool {
       .flatMap { now =>
         kpVar.tryModify {
           case p @ PoolClosed() => (p, F.unit)
-          case p @ PoolOpen(idleCount, m) =>
+          case p @ PoolOpen(idleCount, borrowed, m) =>
             if (m.isEmpty)
               (p, F.unit) // Not worth it to introduce deadlock concerns when hot loop is 5 seconds
             else {
-              val (m_, toDestroy) = findStale(now, idleCount, m)
+              val (idleCount_, toKeep, toDestroy) = findStale(now, idleCount, m)
               (
-                m_,
+                PoolMap.open(idleCount_, borrowed, toKeep),
                 // In this context, we're closing the resource due to it not being used for a while - hence a Succeeded exit case.
                 toDestroy
                   .traverse_(r =>
@@ -243,7 +246,7 @@ object KeyPool {
       case PoolClosed() =>
         (0, Map.empty)
 
-      case PoolOpen(idleCount, m) =>
+      case PoolOpen(idleCount, _, m) =>
         val modified = m.map { case (k, pl) =>
           pl match {
             case One(_, _) => (k, 1)
@@ -283,19 +286,19 @@ object KeyPool {
     ): (PoolMap[A, (B, ExitCase => F[Unit])], ExitCase => F[Unit]) =
       pc match {
         case p @ PoolClosed() => (p, destroyFor(Metrics.DestructionReason.PoolClosed))
-        case p @ PoolOpen(idleCount, m) =>
+        case p @ PoolOpen(idleCount, borrowed, m) =>
           if (kp.kpMaxIdle == 0 || idleCount >= kp.kpMaxIdle)
             (p, destroyFor(Metrics.DestructionReason.MaxIdle))
           else
             m.get(k) match {
               case None =>
                 val cnt_ = idleCount + 1
-                val m_ = PoolMap.open(cnt_, m + (k -> One((r, destroy), now)))
+                val m_ = PoolMap.open(cnt_, borrowed, m + (k -> One((r, destroy), now)))
                 (m_, Function.const[F[Unit], ExitCase](kp.kpMetrics.idleInc))
               case Some(l) =>
                 val (l_, mx) = addToList(now, kp.kpMaxPerKey(k), (r, destroy), l)
                 val cnt_ = idleCount + mx.fold(1)(_ => 0)
-                val m_ = PoolMap.open(cnt_, m + (k -> l_))
+                val m_ = PoolMap.open(cnt_, borrowed, m + (k -> l_))
                 (
                   m_,
                   mx.fold((_: ExitCase) => kp.kpMetrics.idleInc)(_ =>
@@ -320,28 +323,47 @@ object KeyPool {
     ): (PoolMap[A, (B, ExitCase => F[Unit])], Option[(B, ExitCase => F[Unit])]) =
       pm match {
         case p @ PoolClosed() => (p, None)
-        case pOrig @ PoolOpen(idleCount, m) =>
+        case pOrig @ PoolOpen(idleCount, borrowed, m) =>
           m.get(k) match {
             case None => (pOrig, None)
             case Some(One(a, _)) =>
-              (PoolMap.open(idleCount - 1, m - k), Some(a))
+              (PoolMap.open(idleCount - 1, borrowed, m - (k)), Some(a))
             case Some(Cons(a, _, _, rest)) =>
-              (PoolMap.open(idleCount - 1, m + (k -> rest)), Some(a))
+              (PoolMap.open(idleCount - 1, borrowed, m + (k -> rest)), Some(a))
           }
       }
 
     def allocateNew: F[(B, ExitCase => F[Unit])] =
       kp.kpMetrics.createDuration.surround(kp.kpRes(k).allocatedCase)
 
+    def updateBorrowed(
+        pm: PoolMap[A, (B, ExitCase => F[Unit])],
+        update: Map[Unique.Token, (B, ExitCase => F[Unit])] => Map[
+          Unique.Token,
+          (B, ExitCase => F[Unit])
+        ]
+    ): PoolMap[A, (B, ExitCase => F[Unit])] =
+      pm match {
+        case p @ PoolClosed() => p
+        case PoolOpen(idleCount, borrowed, m) =>
+          PoolMap.open(idleCount, update(borrowed), m)
+      }
+
     for {
       acquisition <- kp.kpMetrics.acquire
       _ <- kp.kpMaxTotalSem.permit
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
+      token <- Resource.eval(Temporal[F].unique)
       taken <- Resource.makeCaseFull[F, (Boolean, (B, ExitCase => F[Unit]))] { poll =>
-        kp.kpVar.modify(go).flatMap {
-          case Some(r) => kp.kpMetrics.idleDec.as((true, r))
-          case None => poll(allocateNew).map((false, _))
-        }
+        kp.kpVar
+          .modify(go)
+          .flatMap {
+            case Some(r) => kp.kpMetrics.idleDec.as((true, r))
+            case None => poll(allocateNew).map((false, _))
+          }
+          .flatTap { case (_, r) =>
+            kp.kpVar.update(pm => updateBorrowed(pm, _ + (token -> r)))
+          }
       } { case ((_, (b, destroy)), exitCase) =>
         for {
           reusable <- releasedState.get
@@ -352,6 +374,7 @@ object KeyPool {
                 Metrics.DestructionReason.NotReusable
               ) >> destroy(exitCase).attempt.void
           }
+          _ <- kp.kpVar.update(pm => updateBorrowed(pm, _ - token))
         } yield out
       }
       _ <- Resource.eval(acquisition.complete)
@@ -441,7 +464,7 @@ object KeyPool {
         kpMetrics <- Resource.eval(metricsProvider.get)
         kpVar <- Resource.makeCase(
           Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](
-            PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
+            PoolMap.open(0, Map.empty, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
           )
         )((kpVar, exit) => KeyPool.destroy(kpVar, exit, kpMetrics))
         kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](fairness, kpMaxTotal))
