@@ -102,7 +102,7 @@ lazy val contributors = Seq(
   "ChristopherDavenport" -> "Christopher Davenport"
 )
 
-val catsV = "2.6.1"
+val catsV = "2.7.0"
 val catsEffectV = "3.3.0"
 
 val munitCatsEffectV = "1.0.6"
