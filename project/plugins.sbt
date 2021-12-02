@@ -5,7 +5,7 @@ addSbtPlugin("org.portable-scala" % "sbt-scalajs-crossproject"  % "1.1.0")
 addSbtPlugin("org.scala-js"       % "sbt-scalajs"               % "1.7.1")
 addSbtPlugin("com.github.cb372"   % "sbt-explicit-dependencies" % "0.2.16")
 addSbtPlugin("com.geirsson"       % "sbt-ci-release"            % "1.5.7")
-addSbtPlugin("com.codecommit"     % "sbt-github-actions"        % "0.13.0")
+addSbtPlugin("com.codecommit"     % "sbt-github-actions"        % "0.14.2")
 
 addSbtPlugin("org.scalameta"    % "sbt-mdoc"       % "2.2.24")
 addSbtPlugin("com.47deg"        % "sbt-microsites" % "1.3.4")
