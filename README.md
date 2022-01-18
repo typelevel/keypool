@@ -9,6 +9,6 @@ To use keypool in an existing SBT project with Scala 2.12 or a later version, ad
 
 ```scala
 libraryDependencies ++= Seq(
-  "io.chrisdavenport" %% "keypool" % "<version>"
+  "org.typelevel" %% "keypool" % "<version>"
 )
 ```
