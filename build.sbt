@@ -1,3 +1,5 @@
+import com.typesafe.tools.mima.core._
+
 val Scala213 = "2.13.8"
 
 ThisBuild / tlBaseVersion := "0.4"
@@ -20,6 +22,21 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
   )
   .jsSettings(
     tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.6").toMap
+  )
+  .settings(
+    mimaBinaryIssueFilters ++= Seq(
+      ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool.destroy"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool.reap"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool.put"),
+      ProblemFilters
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#KeyPoolConcrete.this"),
+      ProblemFilters.exclude[DirectMissingMethodProblem](
+        "org.typelevel.keypool.KeyPool#KeyPoolConcrete.kpCreate"
+      ),
+      ProblemFilters.exclude[DirectMissingMethodProblem](
+        "org.typelevel.keypool.KeyPool#KeyPoolConcrete.kpDestroy"
+      )
+    )
   )
 
 lazy val docs = project
