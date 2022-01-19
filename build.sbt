@@ -15,7 +15,11 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
   .in(file("core"))
   .settings(commonSettings)
   .settings(
-    name := "keypool"
+    name := "keypool",
+    mimaPreviousArtifacts ~= { _.filterNot(_.revision == "0.4.4") }
+  )
+  .jsSettings(
+    tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.6").toMap
   )
 
 lazy val docs = project
