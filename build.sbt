@@ -46,7 +46,7 @@ lazy val docs = project
   .enablePlugins(TypelevelSitePlugin)
 
 val catsV = "2.7.0"
-val catsEffectV = "3.3.5"
+val catsEffectV = "3.3.6"
 
 val munitV = "0.7.29"
 val munitCatsEffectV = "1.0.7"
