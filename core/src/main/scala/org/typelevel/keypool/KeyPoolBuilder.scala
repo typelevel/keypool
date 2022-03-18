@@ -94,7 +94,10 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       }
     } yield new KeyPool.KeyPoolConcrete(
       (a: A) => Resource.make[F, B](kpCreate(a))(kpDestroy),
-      kpDefaultReuseState,
+      kpDefaultReuseState match {
+        case Reusable.Reuse => Reusable2.Reuse
+        case Reusable.DontReuse => Reusable2.DontReuse
+      },
       kpMaxPerKey,
       kpMaxTotal,
       kpVar
@@ -118,6 +121,7 @@ object KeyPoolBuilder {
     Defaults.onReaperException[F]
   )
 
+  @deprecated
   private object Defaults {
     val defaultReuseState = Reusable.Reuse
     val idleTimeAllowedInPool = 30.seconds

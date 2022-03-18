@@ -24,6 +24,8 @@ package org.typelevel.keypool
 import cats.Functor
 import cats.effect.kernel._
 
+import scala.annotation.nowarn
+
 /**
  * A managed Resource.
  *
@@ -33,7 +35,9 @@ import cats.effect.kernel._
 final class Managed[F[_], A] private[keypool] (
     val value: A,
     val isReused: Boolean,
-    val canBeReused: Ref[F, Reusable]
+    @deprecated
+    val canBeReused: Ref[F, Reusable],
+    val canBeReused2: Ref[F, Reusable2]
 )
 
 object Managed {
@@ -41,7 +45,8 @@ object Managed {
     def map[A, B](fa: Managed[F, A])(f: A => B): Managed[F, B] = new Managed[F, B](
       f(fa.value),
       fa.isReused,
-      fa.canBeReused
+      fa.canBeReused: @nowarn,
+      fa.canBeReused2
     )
   }
 }

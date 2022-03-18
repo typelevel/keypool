@@ -61,7 +61,7 @@ object KeyPool {
 
   private[keypool] final class KeyPoolConcrete[F[_]: Temporal, A, B] private[keypool] (
       private[keypool] val kpRes: A => Resource[F, B],
-      private[keypool] val kpDefaultReuseState: Reusable,
+      private[keypool] val kpDefaultReuseState: Reusable2,
       private[keypool] val kpMaxPerKey: A => Int,
       private[keypool] val kpMaxTotal: Int,
       private[keypool] val kpVar: Ref[F, PoolMap[A, (B, F[Unit])]]
@@ -292,31 +292,49 @@ object KeyPool {
 
     for {
       optR <- Resource.eval(kp.kpVar.modify(go))
-      releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
+      releasedState <- Resource.eval(Ref[F].of[Reusable2](kp.kpDefaultReuseState))
       resource <- Resource.make(optR.fold(kp.kpRes(k).allocated)(r => Applicative[F].pure(r))) {
         resource =>
           for {
             reusable <- releasedState.get
             out <- reusable match {
-              case Reusable.Reuse => put(kp, k, resource._1, resource._2).attempt.void
-              case Reusable.DontReuse => resource._2.attempt.void
+              case Reusable2.Reuse => put(kp, k, resource._1, resource._2).attempt.void
+              case Reusable2.DontReuse => resource._2.attempt.void
+              case Reusable2.Leak => ??? // TODO
             }
           } yield out
       }
-    } yield new Managed(resource._1, optR.isDefined, releasedState)
+    } yield new Managed(
+      resource._1,
+      optR.isDefined,
+      Ref.lens(releasedState)(
+        {
+          case Reusable2.Reuse | Reusable2.Leak => Reusable.Reuse
+          case Reusable2.DontReuse => Reusable.DontReuse
+        },
+        ???
+      )(???),
+      releasedState
+    )
   }
 
   final class Builder[F[_]: Temporal, A, B] private[keypool] (
       val kpRes: A => Resource[F, B],
-      val kpDefaultReuseState: Reusable,
+      val kpDefaultReuseState2: Reusable2,
       val idleTimeAllowedInPool: Duration,
       val kpMaxPerKey: A => Int,
       val kpMaxTotal: Int,
       val onReaperException: Throwable => F[Unit]
   ) {
+    @deprecated
+    def kpDefaultReuseState: Reusable = kpDefaultReuseState2 match {
+      case Reusable2.Reuse | Reusable2.Leak => Reusable.Reuse
+      case Reusable2.DontReuse => Reusable.DontReuse
+    }
+
     private def copy(
         kpRes: A => Resource[F, B] = this.kpRes,
-        kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
+        kpDefaultReuseState: Reusable2 = this.kpDefaultReuseState2,
         idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
         kpMaxPerKey: A => Int = this.kpMaxPerKey,
         kpMaxTotal: Int = this.kpMaxTotal,
@@ -338,7 +356,14 @@ object KeyPool {
         this.kpRes(k).flatMap(v => Resource.make(Applicative[F].unit)(_ => f(v).attempt.void).as(v))
       })
 
+    @deprecated
     def withDefaultReuseState(defaultReuseState: Reusable) =
+      defaultReuseState match {
+        case Reusable.Reuse => copy(kpDefaultReuseState = Reusable2.Reuse)
+        case Reusable.DontReuse => copy(kpDefaultReuseState = Reusable2.DontReuse)
+      }
+
+    def withDefaultReuseState(defaultReuseState: Reusable2) =
       copy(kpDefaultReuseState = defaultReuseState)
 
     def withIdleTimeAllowedInPool(duration: Duration) =
@@ -371,7 +396,7 @@ object KeyPool {
         }
       } yield new KeyPool.KeyPoolConcrete(
         kpRes,
-        kpDefaultReuseState,
+        kpDefaultReuseState2,
         kpMaxPerKey,
         kpMaxTotal,
         kpVar
@@ -399,7 +424,7 @@ object KeyPool {
       apply(a => Resource.make(create(a))(destroy))
 
     private object Defaults {
-      val defaultReuseState = Reusable.Reuse
+      val defaultReuseState = Reusable2.Reuse
       val idleTimeAllowedInPool = 30.seconds
       def maxPerKey[K](k: K): Int = Function.const(100)(k)
       val maxTotal = 100

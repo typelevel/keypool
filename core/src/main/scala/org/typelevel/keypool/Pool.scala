@@ -72,14 +72,14 @@ object Pool {
 
   final class Builder[F[_]: Temporal, B] private (
       val kpRes: Resource[F, B],
-      val kpDefaultReuseState: Reusable,
+      val kpDefaultReuseState2: Reusable2,
       val idleTimeAllowedInPool: Duration,
       val kpMaxTotal: Int,
       val onReaperException: Throwable => F[Unit]
   ) {
     private def copy(
         kpRes: Resource[F, B] = this.kpRes,
-        kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
+        kpDefaultReuseState: Reusable2 = this.kpDefaultReuseState2,
         idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
         kpMaxTotal: Int = this.kpMaxTotal,
         onReaperException: Throwable => F[Unit] = this.onReaperException
@@ -99,7 +99,14 @@ object Pool {
         this.kpRes.flatMap(v => Resource.make(Applicative[F].unit)(_ => f(v).attempt.void).as(v))
       )
 
+    @deprecated
     def withDefaultReuseState(defaultReuseState: Reusable) =
+      defaultReuseState match {
+        case Reusable.Reuse => copy(kpDefaultReuseState = Reusable2.Reuse)
+        case Reusable.DontReuse => copy(kpDefaultReuseState = Reusable2.DontReuse)
+      }
+
+    def withDefaultReuseState(defaultReuseState: Reusable2) =
       copy(kpDefaultReuseState = defaultReuseState)
 
     def withIdleTimeAllowedInPool(duration: Duration) =
@@ -114,7 +121,7 @@ object Pool {
     private def toKeyPoolBuilder: KeyPool.Builder[F, Unit, B] =
       new KeyPool.Builder(
         kpRes = _ => kpRes,
-        kpDefaultReuseState = kpDefaultReuseState,
+        kpDefaultReuseState2 = kpDefaultReuseState2,
         idleTimeAllowedInPool = idleTimeAllowedInPool,
         kpMaxPerKey = _ => kpMaxTotal,
         kpMaxTotal = kpMaxTotal,
@@ -149,7 +156,7 @@ object Pool {
       apply(Resource.make(create)(destroy))
 
     private object Defaults {
-      val defaultReuseState = Reusable.Reuse
+      val defaultReuseState = Reusable2.Reuse
       val idleTimeAllowedInPool = 30.seconds
       val maxTotal = 100
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>

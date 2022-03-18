@@ -27,8 +27,17 @@ package org.typelevel.keypool
  * If it is Reuse then it will be attempted to place back in the pool, if it is in DontReuse the
  * resource will be shutdown.
  */
+@deprecated
 sealed trait Reusable
+@deprecated
 object Reusable {
   case object Reuse extends Reusable
   case object DontReuse extends Reusable
+}
+
+sealed trait Reusable2
+object Reusable2 {
+  case object Reuse extends Reusable2
+  case object DontReuse extends Reusable2
+  case object Leak extends Reusable2
 }
