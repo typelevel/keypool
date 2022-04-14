@@ -1,4 +1,4 @@
-addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat" % "0.2.2")
+addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat" % "0.2.3")
 addSbtPlugin("com.typesafe" % "sbt-mima-plugin" % "1.0.1")
 
 addSbtPlugin("org.portable-scala" % "sbt-scalajs-crossproject" % "1.2.0")
