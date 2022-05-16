@@ -7,6 +7,8 @@ ThisBuild / scalaVersion := crossScalaVersions.value.last
 
 ThisBuild / githubWorkflowArtifactUpload := false
 
+ThisBuild / sonatypeCredentialHost := "s01.oss.sonatype.org"
+
 val Scala213Cond = s"matrix.scala == '$Scala213'"
 
 def rubySetupSteps(cond: Option[String]) = Seq(
