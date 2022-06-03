@@ -1,4 +1,4 @@
-# keyedpool - A Keyed Pool for Scala
+# keypool - A Keyed Pool for Scala
 
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.typelevel/keypool_2.13/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.typelevel/keypool_2.13)
 
