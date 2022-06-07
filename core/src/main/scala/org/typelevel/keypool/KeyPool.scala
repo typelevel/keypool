@@ -338,10 +338,10 @@ object KeyPool {
         this.kpRes(k).flatMap(v => Resource.make(Applicative[F].unit)(_ => f(v).attempt.void).as(v))
       })
 
-    def withDefaultReuseState(defaultReuseState: Reusable) =
+    def withDefaultReuseState(defaultReuseState: Reusable): Builder[F, A, B] =
       copy(kpDefaultReuseState = defaultReuseState)
 
-    def withIdleTimeAllowedInPool(duration: Duration) =
+    def withIdleTimeAllowedInPool(duration: Duration): Builder[F, A, B] =
       copy(idleTimeAllowedInPool = duration)
 
     def withMaxPerKey(f: A => Int): Builder[F, A, B] =
@@ -350,7 +350,7 @@ object KeyPool {
     def withMaxTotal(total: Int): Builder[F, A, B] =
       copy(kpMaxTotal = total)
 
-    def withOnReaperException(f: Throwable => F[Unit]) =
+    def withOnReaperException(f: Throwable => F[Unit]): Builder[F, A, B] =
       copy(onReaperException = f)
 
     def build: Resource[F, KeyPool[F, A, B]] = {

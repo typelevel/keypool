@@ -99,16 +99,16 @@ object Pool {
         this.kpRes.flatMap(v => Resource.make(Applicative[F].unit)(_ => f(v).attempt.void).as(v))
       )
 
-    def withDefaultReuseState(defaultReuseState: Reusable) =
+    def withDefaultReuseState(defaultReuseState: Reusable): Builder[F, B] =
       copy(kpDefaultReuseState = defaultReuseState)
 
-    def withIdleTimeAllowedInPool(duration: Duration) =
+    def withIdleTimeAllowedInPool(duration: Duration): Builder[F, B] =
       copy(idleTimeAllowedInPool = duration)
 
     def withMaxTotal(total: Int): Builder[F, B] =
       copy(kpMaxTotal = total)
 
-    def withOnReaperException(f: Throwable => F[Unit]) =
+    def withOnReaperException(f: Throwable => F[Unit]): Builder[F, B] =
       copy(onReaperException = f)
 
     private def toKeyPoolBuilder: KeyPool.Builder[F, Unit, B] =
