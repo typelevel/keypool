@@ -23,6 +23,7 @@ package org.typelevel.keypool
 
 import cats._
 import cats.effect.kernel._
+import cats.effect.std.Semaphore
 import cats.syntax.all._
 import scala.concurrent.duration._
 import org.typelevel.keypool.internal._
@@ -64,6 +65,7 @@ object KeyPool {
       private[keypool] val kpDefaultReuseState: Reusable,
       private[keypool] val kpMaxPerKey: A => Int,
       private[keypool] val kpMaxTotal: Int,
+      private[keypool] val kpMaxTotalSem: Semaphore[F],
       private[keypool] val kpVar: Ref[F, PoolMap[A, (B, F[Unit])]]
   ) extends KeyPool[F, A, B] {
 
@@ -291,6 +293,7 @@ object KeyPool {
       }
 
     for {
+      _ <- kp.kpMaxTotalSem.permit
       optR <- Resource.eval(kp.kpVar.modify(go))
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
       resource <- Resource.make(optR.fold(kp.kpRes(k).allocated)(r => Applicative[F].pure(r))) {
@@ -360,6 +363,7 @@ object KeyPool {
         kpVar <- Resource.make(
           Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
         )(kpVar => KeyPool.destroy(kpVar))
+        kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
         _ <- idleTimeAllowedInPool match {
           case fd: FiniteDuration =>
             val nanos = 0.seconds.max(fd)
@@ -374,6 +378,7 @@ object KeyPool {
         kpDefaultReuseState,
         kpMaxPerKey,
         kpMaxTotal,
+        kpMaxTotalSem,
         kpVar
       )
     }
