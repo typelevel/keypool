@@ -35,7 +35,10 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
       ),
       ProblemFilters.exclude[DirectMissingMethodProblem](
         "org.typelevel.keypool.KeyPool#KeyPoolConcrete.kpDestroy"
-      )
+      ),
+      ProblemFilters
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPoolBuilder.this"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#Builder.this")
     )
   )
 

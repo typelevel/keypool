@@ -64,6 +64,7 @@ object KeyPool {
       private[keypool] val kpRes: A => Resource[F, B],
       private[keypool] val kpDefaultReuseState: Reusable,
       private[keypool] val kpMaxPerKey: A => Int,
+      private[keypool] val kpMaxIdle: Int,
       private[keypool] val kpMaxTotal: Int,
       private[keypool] val kpMaxTotalSem: Semaphore[F],
       private[keypool] val kpVar: Ref[F, PoolMap[A, (B, F[Unit])]]
@@ -255,7 +256,7 @@ object KeyPool {
       pc match {
         case p @ PoolClosed() => (p, destroy)
         case p @ PoolOpen(idleCount, m) =>
-          if (idleCount > kp.kpMaxTotal) (p, destroy)
+          if (idleCount > kp.kpMaxIdle) (p, destroy)
           else
             m.get(k) match {
               case None =>
@@ -314,6 +315,7 @@ object KeyPool {
       val kpDefaultReuseState: Reusable,
       val idleTimeAllowedInPool: Duration,
       val kpMaxPerKey: A => Int,
+      val kpMaxIdle: Int,
       val kpMaxTotal: Int,
       val onReaperException: Throwable => F[Unit]
   ) {
@@ -322,6 +324,7 @@ object KeyPool {
         kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
         idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
         kpMaxPerKey: A => Int = this.kpMaxPerKey,
+        kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
         onReaperException: Throwable => F[Unit] = this.onReaperException
     ): Builder[F, A, B] = new Builder[F, A, B](
@@ -329,6 +332,7 @@ object KeyPool {
       kpDefaultReuseState,
       idleTimeAllowedInPool,
       kpMaxPerKey,
+      kpMaxIdle,
       kpMaxTotal,
       onReaperException
     )
@@ -349,6 +353,9 @@ object KeyPool {
 
     def withMaxPerKey(f: A => Int): Builder[F, A, B] =
       copy(kpMaxPerKey = f)
+
+    def withMaxIdle(maxIdle: Int): Builder[F, A, B] =
+      copy(kpMaxIdle = maxIdle)
 
     def withMaxTotal(total: Int): Builder[F, A, B] =
       copy(kpMaxTotal = total)
@@ -377,6 +384,7 @@ object KeyPool {
         kpRes,
         kpDefaultReuseState,
         kpMaxPerKey,
+        kpMaxIdle,
         kpMaxTotal,
         kpMaxTotalSem,
         kpVar
@@ -393,6 +401,7 @@ object KeyPool {
       Defaults.defaultReuseState,
       Defaults.idleTimeAllowedInPool,
       Defaults.maxPerKey,
+      Defaults.maxIdle,
       Defaults.maxTotal,
       Defaults.onReaperException[F]
     )
@@ -407,6 +416,7 @@ object KeyPool {
       val defaultReuseState = Reusable.Reuse
       val idleTimeAllowedInPool = 30.seconds
       def maxPerKey[K](k: K): Int = Function.const(100)(k)
+      val maxIdle = 100
       val maxTotal = 100
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)
