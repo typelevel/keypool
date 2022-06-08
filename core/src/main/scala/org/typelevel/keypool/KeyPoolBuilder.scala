@@ -81,7 +81,9 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       fa.onError { case e => onReaperException(e) }.attempt >> keepRunning(fa)
     for {
       kpVar <- Resource.make(
-        Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
+        Ref[F].of[PoolMap[A, (B, F[Unit])]](
+          PoolMap.open(0, Map.empty, Map.empty[A, PoolList[(B, F[Unit])]])
+        )
       )(kpVar => KeyPool.destroy(kpVar))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
