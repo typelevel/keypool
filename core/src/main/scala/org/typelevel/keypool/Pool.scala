@@ -24,6 +24,7 @@ package org.typelevel.keypool
 import cats._
 import cats.effect.kernel._
 import cats.syntax.all._
+import org.typelevel.otel4s.MeterProvider
 import scala.concurrent.duration._
 
 /**
@@ -75,20 +76,23 @@ object Pool {
       val kpDefaultReuseState: Reusable,
       val idleTimeAllowedInPool: Duration,
       val kpMaxTotal: Int,
-      val onReaperException: Throwable => F[Unit]
+      val onReaperException: Throwable => F[Unit],
+      val meterProvider: MeterProvider[F]
   ) {
     private def copy(
         kpRes: Resource[F, B] = this.kpRes,
         kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
         idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
         kpMaxTotal: Int = this.kpMaxTotal,
-        onReaperException: Throwable => F[Unit] = this.onReaperException
+        onReaperException: Throwable => F[Unit] = this.onReaperException,
+        meterProvider: MeterProvider[F] = this.meterProvider
     ): Builder[F, B] = new Builder[F, B](
       kpRes,
       kpDefaultReuseState,
       idleTimeAllowedInPool,
       kpMaxTotal,
-      onReaperException
+      onReaperException,
+      meterProvider
     )
 
     def doOnCreate(f: B => F[Unit]): Builder[F, B] =
@@ -111,6 +115,9 @@ object Pool {
     def withOnReaperException(f: Throwable => F[Unit]): Builder[F, B] =
       copy(onReaperException = f)
 
+    def withMeterProvider(meterProvider: MeterProvider[F]): Builder[F, B] =
+      copy(meterProvider = meterProvider)
+
     private def toKeyPoolBuilder: KeyPool.Builder[F, Unit, B] =
       new KeyPool.Builder(
         kpRes = _ => kpRes,
@@ -118,7 +125,8 @@ object Pool {
         idleTimeAllowedInPool = idleTimeAllowedInPool,
         kpMaxPerKey = _ => kpMaxTotal,
         kpMaxTotal = kpMaxTotal,
-        onReaperException = onReaperException
+        onReaperException = onReaperException,
+        meterProvider = meterProvider
       )
 
     def build: Resource[F, Pool[F, B]] = {
@@ -139,7 +147,8 @@ object Pool {
       Defaults.defaultReuseState,
       Defaults.idleTimeAllowedInPool,
       Defaults.maxTotal,
-      Defaults.onReaperException[F]
+      Defaults.onReaperException[F],
+      Defaults.meterProvider
     )
 
     def apply[F[_]: Temporal, B](
@@ -155,6 +164,7 @@ object Pool {
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)
       }
+      def meterProvider[F[_]: Applicative]: MeterProvider[F] = MeterProvider.noop
     }
   }
 }

@@ -23,6 +23,13 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
   .jsSettings(
     tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.6").toMap
   )
+  .jvmSettings(
+    libraryDependencies ++= Seq(
+      "org.typelevel"   %% "otel4s-java"               % otel4sV  % Test,
+      "io.opentelemetry" % "opentelemetry-sdk"         % "1.14.0" % Test,
+      "io.opentelemetry" % "opentelemetry-sdk-testing" % "1.14.0" % Test
+    )
+  )
   .settings(
     mimaBinaryIssueFilters ++= Seq(
       ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool.destroy"),
@@ -48,6 +55,8 @@ lazy val docs = project
 val catsV = "2.7.0"
 val catsEffectV = "3.3.12"
 
+val otel4sV = "0.0-c25617c-20220609T070516Z-SNAPSHOT"
+
 val munitV = "0.7.29"
 val munitCatsEffectV = "1.0.7"
 
@@ -60,6 +69,7 @@ lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
     "org.typelevel" %%% "cats-core"           % catsV,
     "org.typelevel" %%% "cats-effect-kernel"  % catsEffectV,
+    "org.typelevel" %%% "otel4s-core"         % otel4sV,
     "org.typelevel" %%% "cats-effect-std"     % catsEffectV      % Test,
     "org.scalameta" %%% "munit"               % munitV           % Test,
     "org.typelevel" %%% "munit-cats-effect-3" % munitCatsEffectV % Test

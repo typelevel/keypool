@@ -21,10 +21,12 @@
 
 package org.typelevel.keypool
 
-import internal.{PoolList, PoolMap}
+import internal.{Metrics, PoolList, PoolMap}
 import cats._
 import cats.syntax.all._
 import cats.effect.kernel._
+import cats.effect.syntax.spawn._
+import org.typelevel.otel4s.MeterProvider
 import scala.concurrent.duration._
 
 @deprecated("use KeyPool.Builder", "0.4.7")
@@ -83,12 +85,11 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpVar <- Resource.make(
         Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
       )(kpVar => KeyPool.destroy(kpVar))
+      kpMetrics <- Resource.eval(Metrics.fromMeterProvider(MeterProvider.noop))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
-          Resource.make(
-            Concurrent[F].start(keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)))
-          )(_.cancel)
+          keepRunning(KeyPool.reap(nanos, kpVar, kpMetrics, onReaperException)).background.void
         case _ =>
           Applicative[Resource[F, *]].unit
       }
@@ -97,7 +98,8 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpDefaultReuseState,
       kpMaxPerKey,
       kpMaxTotal,
-      kpVar
+      kpVar,
+      kpMetrics
     )
   }
 
