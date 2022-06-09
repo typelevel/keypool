@@ -7,7 +7,7 @@ ThisBuild / crossScalaVersions := Seq("2.12.15", Scala213, "3.0.2")
 ThisBuild / tlVersionIntroduced := Map("3" -> "0.4.3")
 ThisBuild / developers += tlGitHubDev("ChristopherDavenport", "Christopher Davenport")
 ThisBuild / startYear := Some(2019)
-ThisBuild / licenses := Seq("MIT" -> url("https://opensource.org/licenses/MIT"))
+ThisBuild / licenses := Seq(License.MIT)
 ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/keypool_2.12"))
 
 lazy val root = tlCrossRootProject.aggregate(core)

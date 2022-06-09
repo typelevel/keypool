@@ -23,6 +23,7 @@ package org.typelevel.keypool
 
 import cats._
 import cats.effect.kernel._
+import cats.effect.kernel.syntax.spawn._
 import cats.effect.std.Semaphore
 import cats.syntax.all._
 import scala.concurrent.duration._
@@ -138,7 +139,7 @@ object KeyPool {
       kpVar: Ref[F, PoolMap[A, (B, F[Unit])]],
       onReaperException: Throwable => F[Unit]
   )(implicit F: Temporal[F]): F[Unit] = {
-    // We are going to do non-referentially tranpsarent things as we may be waiting for our modification to go through
+    // We are going to do non-referentially transparent things as we may be waiting for our modification to go through
     // which may change the state depending on when the modification block is running atomically at the moment
     def findStale(
         now: FiniteDuration,
@@ -154,6 +155,7 @@ object KeyPool {
       // ([resource] -> [resource]) ->
       // [(key, PoolList resource)] ->
       // (Map key (PoolList resource), [resource])
+      @annotation.tailrec
       def findStale_(
           toKeep: List[(A, PoolList[(B, F[Unit])])] => List[(A, PoolList[(B, F[Unit])])],
           toDestroy: List[(A, (B, F[Unit]))] => List[(A, (B, F[Unit]))],
@@ -166,7 +168,7 @@ object KeyPool {
             // when it is placed back into the pool.
             val (notStale, stale) = pList.toList.span(r => isNotStale(r._1))
             val toDestroy_ : List[(A, (B, F[Unit]))] => List[(A, (B, F[Unit]))] = l =>
-              toDestroy((stale.map(t => (key -> t._2)) ++ l))
+              toDestroy(stale.map(t => key -> t._2) ++ l)
             val toKeep_ : List[(A, PoolList[(B, F[Unit])])] => List[(A, PoolList[(B, F[Unit])])] =
               l =>
                 PoolList.fromList(notStale) match {
@@ -217,19 +219,19 @@ object KeyPool {
   private[keypool] def state[F[_]: Functor, A, B](
       kpVar: Ref[F, PoolMap[A, (B, F[Unit])]]
   ): F[(Int, Map[A, Int])] =
-    kpVar.get.map(pm =>
-      pm match {
-        case PoolClosed() => (0, Map.empty)
-        case PoolOpen(idleCount, m) =>
-          val modified = m.map { case (k, pl) =>
-            pl match {
-              case One(_, _) => (k, 1)
-              case Cons(_, length, _, _) => (k, length)
-            }
-          }.toMap
-          (idleCount, modified)
-      }
-    )
+    kpVar.get.map {
+      case PoolClosed() =>
+        (0, Map.empty)
+
+      case PoolOpen(idleCount, m) =>
+        val modified = m.map { case (k, pl) =>
+          pl match {
+            case One(_, _) => (k, 1)
+            case Cons(_, length, _, _) => (k, length)
+          }
+        }
+        (idleCount, modified)
+    }
 
   private[keypool] def put[F[_]: Temporal, A, B](
       kp: KeyPoolConcrete[F, A, B],
@@ -287,7 +289,7 @@ object KeyPool {
           m.get(k) match {
             case None => (pOrig, None)
             case Some(One(a, _)) =>
-              (PoolMap.open(idleCount - 1, m - (k)), Some(a))
+              (PoolMap.open(idleCount - 1, m - k), Some(a))
             case Some(Cons(a, _, _, rest)) =>
               (PoolMap.open(idleCount - 1, m + (k -> rest)), Some(a))
           }
@@ -345,10 +347,10 @@ object KeyPool {
         this.kpRes(k).flatMap(v => Resource.make(Applicative[F].unit)(_ => f(v).attempt.void).as(v))
       })
 
-    def withDefaultReuseState(defaultReuseState: Reusable) =
+    def withDefaultReuseState(defaultReuseState: Reusable): Builder[F, A, B] =
       copy(kpDefaultReuseState = defaultReuseState)
 
-    def withIdleTimeAllowedInPool(duration: Duration) =
+    def withIdleTimeAllowedInPool(duration: Duration): Builder[F, A, B] =
       copy(idleTimeAllowedInPool = duration)
 
     def withMaxPerKey(f: A => Int): Builder[F, A, B] =
@@ -360,7 +362,7 @@ object KeyPool {
     def withMaxTotal(total: Int): Builder[F, A, B] =
       copy(kpMaxTotal = total)
 
-    def withOnReaperException(f: Throwable => F[Unit]) =
+    def withOnReaperException(f: Throwable => F[Unit]): Builder[F, A, B] =
       copy(onReaperException = f)
 
     def build: Resource[F, KeyPool[F, A, B]] = {
@@ -374,9 +376,7 @@ object KeyPool {
         _ <- idleTimeAllowedInPool match {
           case fd: FiniteDuration =>
             val nanos = 0.seconds.max(fd)
-            Resource.make(
-              Concurrent[F].start(keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)))
-            )(_.cancel)
+            keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)).background.void
           case _ =>
             Applicative[Resource[F, *]].unit
         }
