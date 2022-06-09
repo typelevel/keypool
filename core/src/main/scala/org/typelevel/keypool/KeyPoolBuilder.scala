@@ -25,7 +25,7 @@ import internal.{Metrics, PoolList, PoolMap}
 import cats._
 import cats.syntax.all._
 import cats.effect.kernel._
-import cats.effect.syntax.spawn._
+import cats.effect.kernel.syntax.spawn._
 import org.typelevel.otel4s.MeterProvider
 import scala.concurrent.duration._
 

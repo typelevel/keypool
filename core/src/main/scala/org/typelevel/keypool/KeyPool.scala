@@ -23,11 +23,11 @@ package org.typelevel.keypool
 
 import cats._
 import cats.effect.kernel._
-import cats.effect.syntax.spawn._
+import cats.effect.kernel.syntax.spawn._
 import cats.syntax.all._
 import scala.concurrent.duration._
 import org.typelevel.keypool.internal._
-import org.typelevel.otel4s.{MeterProvider}
+import org.typelevel.otel4s.MeterProvider
 
 /**
  * This pools internal guarantees are that the max number of values are in the pool at any time, not
@@ -139,7 +139,7 @@ object KeyPool {
       metrics: Metrics[F],
       onReaperException: Throwable => F[Unit]
   )(implicit F: Temporal[F]): F[Unit] = {
-    // We are going to do non-referentially tranpsarent things as we may be waiting for our modification to go through
+    // We are going to do non-referentially transparent things as we may be waiting for our modification to go through
     // which may change the state depending on when the modification block is running atomically at the moment
     def findStale(
         now: FiniteDuration,
@@ -155,6 +155,7 @@ object KeyPool {
       // ([resource] -> [resource]) ->
       // [(key, PoolList resource)] ->
       // (Map key (PoolList resource), [resource])
+      @annotation.tailrec
       def findStale_(
           toKeep: List[(A, PoolList[(B, F[Unit])])] => List[(A, PoolList[(B, F[Unit])])],
           toDestroy: List[(A, (B, F[Unit]))] => List[(A, (B, F[Unit]))],
@@ -167,7 +168,7 @@ object KeyPool {
             // when it is placed back into the pool.
             val (notStale, stale) = pList.toList.span(r => isNotStale(r._1))
             val toDestroy_ : List[(A, (B, F[Unit]))] => List[(A, (B, F[Unit]))] = l =>
-              toDestroy((stale.map(t => (key -> t._2)) ++ l))
+              toDestroy(stale.map(t => key -> t._2) ++ l)
             val toKeep_ : List[(A, PoolList[(B, F[Unit])])] => List[(A, PoolList[(B, F[Unit])])] =
               l =>
                 PoolList.fromList(notStale) match {
@@ -292,7 +293,7 @@ object KeyPool {
           m.get(k) match {
             case None => (pOrig, None)
             case Some(One(a, _)) =>
-              (PoolMap.open(idleCount - 1, m - (k)), Some(a))
+              (PoolMap.open(idleCount - 1, m - k), Some(a))
             case Some(Cons(a, _, _, rest)) =>
               (PoolMap.open(idleCount - 1, m + (k -> rest)), Some(a))
           }
