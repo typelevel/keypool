@@ -25,6 +25,7 @@ import internal.{PoolList, PoolMap}
 import cats._
 import cats.syntax.all._
 import cats.effect.kernel._
+import cats.effect.kernel.syntax.spawn._
 import scala.concurrent.duration._
 
 @deprecated("use KeyPool.Builder", "0.4.7")
@@ -86,9 +87,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
-          Resource.make(
-            Concurrent[F].start(keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)))
-          )(_.cancel)
+          keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)).background.void
         case _ =>
           Applicative[Resource[F, *]].unit
       }
