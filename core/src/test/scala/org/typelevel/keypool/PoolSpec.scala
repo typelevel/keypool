@@ -29,8 +29,6 @@ import scala.concurrent.ExecutionContext
 
 class PoolSpec extends CatsEffectSuite {
 
-  override val munitExecutionContext: ExecutionContext = ExecutionContext.global
-
   test("Keep Resources marked to be kept") {
     Pool
       .Builder(
