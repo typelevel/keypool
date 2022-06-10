@@ -25,7 +25,6 @@ import cats.syntax.all._
 import cats.effect._
 import scala.concurrent.duration._
 import munit.CatsEffectSuite
-import scala.concurrent.ExecutionContext
 
 class PoolSpec extends CatsEffectSuite {
 
