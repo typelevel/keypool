@@ -74,6 +74,7 @@ object Pool {
       val kpRes: Resource[F, B],
       val kpDefaultReuseState: Reusable,
       val idleTimeAllowedInPool: Duration,
+      val kpMaxIdle: Int,
       val kpMaxTotal: Int,
       val onReaperException: Throwable => F[Unit]
   ) {
@@ -81,12 +82,14 @@ object Pool {
         kpRes: Resource[F, B] = this.kpRes,
         kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
         idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
+        kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
         onReaperException: Throwable => F[Unit] = this.onReaperException
     ): Builder[F, B] = new Builder[F, B](
       kpRes,
       kpDefaultReuseState,
       idleTimeAllowedInPool,
+      kpMaxIdle,
       kpMaxTotal,
       onReaperException
     )
@@ -105,6 +108,9 @@ object Pool {
     def withIdleTimeAllowedInPool(duration: Duration): Builder[F, B] =
       copy(idleTimeAllowedInPool = duration)
 
+    def withMaxIdle(maxIdle: Int): Builder[F, B] =
+      copy(kpMaxIdle = maxIdle)
+
     def withMaxTotal(total: Int): Builder[F, B] =
       copy(kpMaxTotal = total)
 
@@ -117,6 +123,7 @@ object Pool {
         kpDefaultReuseState = kpDefaultReuseState,
         idleTimeAllowedInPool = idleTimeAllowedInPool,
         kpMaxPerKey = _ => kpMaxTotal,
+        kpMaxIdle = kpMaxIdle,
         kpMaxTotal = kpMaxTotal,
         onReaperException = onReaperException
       )
@@ -138,6 +145,7 @@ object Pool {
       res,
       Defaults.defaultReuseState,
       Defaults.idleTimeAllowedInPool,
+      Defaults.maxIdle,
       Defaults.maxTotal,
       Defaults.onReaperException[F]
     )
@@ -151,6 +159,7 @@ object Pool {
     private object Defaults {
       val defaultReuseState = Reusable.Reuse
       val idleTimeAllowedInPool = 30.seconds
+      val maxIdle = 100
       val maxTotal = 100
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)

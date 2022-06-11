@@ -35,7 +35,11 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
       ),
       ProblemFilters.exclude[DirectMissingMethodProblem](
         "org.typelevel.keypool.KeyPool#KeyPoolConcrete.kpDestroy"
-      )
+      ),
+      ProblemFilters
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPoolBuilder.this"),
+      ProblemFilters
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#Builder.this")
     )
   )
 
@@ -59,8 +63,7 @@ lazy val commonSettings = Seq(
   Test / parallelExecution := false,
   libraryDependencies ++= Seq(
     "org.typelevel" %%% "cats-core"           % catsV,
-    "org.typelevel" %%% "cats-effect-kernel"  % catsEffectV,
-    "org.typelevel" %%% "cats-effect-std"     % catsEffectV      % Test,
+    "org.typelevel" %%% "cats-effect-std"     % catsEffectV,
     "org.scalameta" %%% "munit"               % munitV           % Test,
     "org.typelevel" %%% "munit-cats-effect-3" % munitCatsEffectV % Test
   )

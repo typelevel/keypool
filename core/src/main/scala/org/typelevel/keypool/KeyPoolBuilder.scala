@@ -26,6 +26,7 @@ import cats._
 import cats.syntax.all._
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.spawn._
+import cats.effect.std.Semaphore
 import scala.concurrent.duration._
 
 @deprecated("use KeyPool.Builder", "0.4.7")
@@ -35,6 +36,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
     val kpDefaultReuseState: Reusable,
     val idleTimeAllowedInPool: Duration,
     val kpMaxPerKey: A => Int,
+    val kpMaxIdle: Int,
     val kpMaxTotal: Int,
     val onReaperException: Throwable => F[Unit]
 ) {
@@ -44,6 +46,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
       idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
       kpMaxPerKey: A => Int = this.kpMaxPerKey,
+      kpMaxIdle: Int = this.kpMaxIdle,
       kpMaxTotal: Int = this.kpMaxTotal,
       onReaperException: Throwable => F[Unit] = this.onReaperException
   ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
@@ -52,6 +55,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
     kpDefaultReuseState,
     idleTimeAllowedInPool,
     kpMaxPerKey,
+    kpMaxIdle,
     kpMaxTotal,
     onReaperException
   )
@@ -71,6 +75,9 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
   def withMaxPerKey(f: A => Int): KeyPoolBuilder[F, A, B] =
     copy(kpMaxPerKey = f)
 
+  def withMaxIdle(maxIdle: Int): KeyPoolBuilder[F, A, B] =
+    copy(kpMaxIdle = maxIdle)
+
   def withMaxTotal(total: Int): KeyPoolBuilder[F, A, B] =
     copy(kpMaxTotal = total)
 
@@ -84,6 +91,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpVar <- Resource.make(
         Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
       )(kpVar => KeyPool.destroy(kpVar))
+      kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
@@ -95,7 +103,9 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       (a: A) => Resource.make[F, B](kpCreate(a))(kpDestroy),
       kpDefaultReuseState,
       kpMaxPerKey,
+      kpMaxIdle,
       kpMaxTotal,
+      kpMaxTotalSem,
       kpVar
     )
   }
@@ -113,6 +123,7 @@ object KeyPoolBuilder {
     Defaults.defaultReuseState,
     Defaults.idleTimeAllowedInPool,
     Defaults.maxPerKey,
+    Defaults.maxIdle,
     Defaults.maxTotal,
     Defaults.onReaperException[F]
   )
@@ -121,6 +132,7 @@ object KeyPoolBuilder {
     val defaultReuseState = Reusable.Reuse
     val idleTimeAllowedInPool = 30.seconds
     def maxPerKey[K](k: K): Int = Function.const(100)(k)
+    val maxIdle = 100
     val maxTotal = 100
     def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
       Function.const(Applicative[F].unit)(t)
