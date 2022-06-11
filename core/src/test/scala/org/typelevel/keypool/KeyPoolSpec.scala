@@ -25,11 +25,8 @@ import cats.syntax.all._
 import cats.effect._
 import scala.concurrent.duration._
 import munit.CatsEffectSuite
-import scala.concurrent.ExecutionContext
 
 class KeypoolSpec extends CatsEffectSuite {
-
-  override val munitExecutionContext: ExecutionContext = ExecutionContext.global
 
   test("Keep Resources marked to be kept") {
     def nothing(ref: Ref[IO, Int]): IO[Unit] =
