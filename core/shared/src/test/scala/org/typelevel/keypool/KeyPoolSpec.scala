@@ -27,7 +27,7 @@ import cats.effect.std.CountDownLatch
 import scala.concurrent.duration._
 import munit.CatsEffectSuite
 
-class KeypoolSpec extends CatsEffectSuite {
+class KeyPoolSpec extends CatsEffectSuite {
 
   test("Keep Resources marked to be kept") {
     KeyPool

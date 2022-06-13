@@ -13,7 +13,7 @@ ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/k
 lazy val root = tlCrossRootProject.aggregate(core)
 
 lazy val core = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
+  .crossType(CrossType.Full)
   .in(file("core"))
   .settings(commonSettings)
   .settings(
