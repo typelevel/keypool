@@ -21,6 +21,7 @@
 
 package org.typelevel.keypool
 
+import java.util.concurrent.TimeUnit
 import cats._
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.spawn._
@@ -202,7 +203,7 @@ object KeyPool {
               val (m_, toDestroy) = findStale(now, idleCount, m)
               (
                 m_,
-                toDestroy.traverse_(r => metrics.decIdle >> r._2._2).attempt.flatMap {
+                toDestroy.traverse_(r => metrics.idle.dec() >> r._2._2).attempt.flatMap {
                   case Left(t) => onReaperException(t)
                   // .handleErrorWith(t => F.delay(t.printStackTrace())) // CHEATING?
                   case Right(()) => F.unit
@@ -259,24 +260,24 @@ object KeyPool {
         }
       }
 
-    def decIdle = kp.kpMetrics.decIdle.whenA(isFromPool)
+    def decIdle = kp.kpMetrics.idle.dec().whenA(isFromPool)
 
     def go(now: FiniteDuration, pc: PoolMap[A, (B, F[Unit])]): (PoolMap[A, (B, F[Unit])], F[Unit]) =
       pc match {
         case p @ PoolClosed() => (p, decIdle >> destroy)
         case p @ PoolOpen(idleCount, m) =>
-          if (idleCount > kp.kpMaxIdle) (p, decIdle >> destroy)
+          if (kp.kpMaxIdle == 0 || idleCount > kp.kpMaxIdle) (p, decIdle >> destroy)
           else
             m.get(k) match {
               case None =>
                 val cnt_ = idleCount + 1
                 val m_ = PoolMap.open(cnt_, m + (k -> One((r, destroy), now)))
-                (m_, kp.kpMetrics.incIdle)
+                (m_, kp.kpMetrics.idle.inc())
               case Some(l) =>
                 val (l_, mx) = addToList(now, kp.kpMaxPerKey(k), (r, destroy), l)
                 val cnt_ = idleCount + mx.fold(1)(_ => 0)
                 val m_ = PoolMap.open(cnt_, m + (k -> l_))
-                (m_, mx.fold(kp.kpMetrics.incIdle)(_ => decIdle >> destroy))
+                (m_, mx.fold(kp.kpMetrics.idle.inc())(_ => decIdle >> destroy))
             }
       }
 
@@ -302,13 +303,16 @@ object KeyPool {
           }
       }
 
+    def allocateNew: F[(B, F[Unit])] =
+      kp.kpMetrics.acquireDuration
+        .recordDuration(TimeUnit.MILLISECONDS)
+        .use(_ => kp.kpRes(k).allocated)
+
     for {
       _ <- kp.kpMaxTotalSem.permit
       optR <- Resource.eval(kp.kpVar.modify(go))
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
-      resource <- Resource.make(
-        optR.fold(kp.kpMetrics.recordAcquireDuration(kp.kpRes(k)))(r => Applicative[F].pure(r))
-      ) { resource =>
+      resource <- Resource.make(optR.fold(allocateNew)(r => Applicative[F].pure(r))) { resource =>
         for {
           reusable <- releasedState.get
           out <- reusable match {
@@ -317,9 +321,9 @@ object KeyPool {
           }
         } yield out
       }
-      _ <- Resource.eval(kp.kpMetrics.acquiredTotal.add(1).whenA(optR.isEmpty))
-      _ <- Resource.make(kp.kpMetrics.incInUse)(_ => kp.kpMetrics.decInUse)
-      _ <- kp.kpMetrics.recordInUseDuration
+      _ <- Resource.eval(kp.kpMetrics.acquiredTotal.inc().whenA(optR.isEmpty))
+      _ <- Resource.make(kp.kpMetrics.inUse.inc())(_ => kp.kpMetrics.inUse.dec())
+      _ <- kp.kpMetrics.inUseDuration.recordDuration(TimeUnit.MILLISECONDS)
     } yield new Managed(resource._1, optR.isDefined, releasedState)
   }
 

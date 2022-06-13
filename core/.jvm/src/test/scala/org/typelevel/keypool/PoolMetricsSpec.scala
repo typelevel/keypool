@@ -21,6 +21,7 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NoStackTrace
 
 class PoolMetricsSpec extends CatsEffectSuite {
+  import PoolMetricsSpec._
 
   test("Metrics should be empty for unused pool") {
     val expectedSnapshot = MetricsSnapshot(0, 0, Nil, 0, Nil)
@@ -61,8 +62,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
   }
 
   test("Idle: keep 0 when `maxIdle` is 0") {
-    // todo replace with `withMaxIdle` once https://github.com/typelevel/keypool/pull/394 gets merged
-    poolTest(_.withMaxTotal(-1)) { (sdk, pool) =>
+    poolTest(_.withMaxIdle(0)) { (sdk, pool) =>
       for {
         inUse <- pool.take.use(_ => sdk.snapshot)
         afterUse <- sdk.snapshot
@@ -74,8 +74,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
   }
 
   test("Idle: keep 1 when `maxIdle` is 1") {
-    // todo replace with `withMaxIdle` once https://github.com/typelevel/keypool/pull/394 gets merged
-    poolTest(_.withMaxTotal(1)) { (sdk, pool) =>
+    poolTest(_.withMaxIdle(1)) { (sdk, pool) =>
       for {
         inUse <- pool.take.use(_ => sdk.snapshot)
         afterUse <- sdk.snapshot
@@ -87,8 +86,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
   }
 
   test("Idle: decrement on reaper cleanup") {
-    // todo replace with `withMaxIdle` once https://github.com/typelevel/keypool/pull/394 gets merged
-    poolTest(_.withMaxTotal(1).withIdleTimeAllowedInPool(1.second)) { (sdk, pool) =>
+    poolTest(_.withMaxIdle(1).withIdleTimeAllowedInPool(1.second)) { (sdk, pool) =>
       for {
         inUse <- pool.take.use(_ => sdk.snapshot)
         afterUse <- sdk.snapshot
@@ -107,7 +105,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
         .use(pool => pool.take.use(_ => sdk.snapshot.delayBy(500.millis)).product(sdk.snapshot))
         .map { case (inUse, afterUse) =>
           val acquireDuration =
-            List(HistogramSnapshot(0, 1, HistogramBuckets, List(1, 0, 0, 0, 0)))
+            List(HistogramSnapshot(0, 1, HistogramBuckets, List(0, 1, 0, 0, 0)))
 
           val expectedInUse = MetricsSnapshot(
             idle = 0,
@@ -125,11 +123,8 @@ class PoolMetricsSpec extends CatsEffectSuite {
             acquireDuration = acquireDuration
           )
 
-          assertEquals(inUse, expectedInUse)
-          assertEquals(
-            afterUse.copy(inUseDuration = afterUse.inUseDuration.map(_.copy(sum = 0))),
-            expectedAfterUser
-          )
+          assertEquals(inUse.zeroSumHistogram, expectedInUse)
+          assertEquals(afterUse.zeroSumHistogram, expectedAfterUser)
           assert(afterUse.inUseDuration.forall(r => r.sum >= 500 && r.sum <= 700))
         }
     }
@@ -181,7 +176,10 @@ class PoolMetricsSpec extends CatsEffectSuite {
       new OtelSdk[IO] {
         def metricReader: InMemoryMetricReader = mr
         def otel: Otel4s[IO] = OtelJava.forSync[IO](sdk)
-        def flush: IO[Unit] = IO.blocking(mp.forceFlush().join(5, TimeUnit.SECONDS))
+        def flush: IO[Unit] = IO.blocking {
+          val _ = mp.forceFlush().join(5, TimeUnit.SECONDS)
+          ()
+        }
 
         def snapshot: IO[MetricsSnapshot] = {
           IO.delay {
@@ -227,32 +225,45 @@ class PoolMetricsSpec extends CatsEffectSuite {
     Resource.make(acquire)(release)
   }
 
-  final case class MetricsSnapshot(
-      idle: Long,
-      inUse: Long,
-      inUseDuration: List[HistogramSnapshot],
-      acquiredTotal: Long,
-      acquireDuration: List[HistogramSnapshot]
-  )
+  private val HistogramBuckets: List[Double] =
+    List(0.01, 1, 100, 1000)
 
-  final case class HistogramSnapshot(
-      sum: Double,
-      count: Double,
-      boundaries: List[Double],
-      counts: List[Long]
-  )
+  private def nothing(ref: Ref[IO, Int]): IO[Unit] =
+    ref.get.void
 
-  private trait OtelSdk[F[_]] {
+}
+
+object PoolMetricsSpec {
+
+  trait OtelSdk[F[_]] {
     def metricReader: InMemoryMetricReader
     def otel: Otel4s[F]
     def flush: F[Unit]
     def snapshot: F[MetricsSnapshot]
   }
 
-  private val HistogramBuckets: List[Double] =
-    List(0.01, 1, 100, 1000)
+  final case class MetricsSnapshot(
+      idle: Long,
+      inUse: Long,
+      inUseDuration: List[HistogramSnapshot],
+      acquiredTotal: Long,
+      acquireDuration: List[HistogramSnapshot]
+  ) {
+    // use 0 for `histogram#sum` to simplify the comparison
+    def zeroSumHistogram: MetricsSnapshot =
+      copy(
+        inUseDuration = inUseDuration.map(_.zeroSum),
+        acquireDuration = acquireDuration.map(_.zeroSum)
+      )
+  }
 
-  private def nothing(ref: Ref[IO, Int]): IO[Unit] =
-    ref.get.void
+  final case class HistogramSnapshot(
+      sum: Double,
+      count: Long,
+      boundaries: List[Double],
+      counts: List[Long]
+  ) {
+    def zeroSum: HistogramSnapshot = copy(sum = 0)
+  }
 
 }

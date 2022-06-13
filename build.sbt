@@ -13,7 +13,7 @@ ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/k
 lazy val root = tlCrossRootProject.aggregate(core)
 
 lazy val core = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Full)
+  .crossType(CrossType.Pure)
   .in(file("core"))
   .settings(commonSettings)
   .settings(
@@ -59,7 +59,7 @@ lazy val docs = project
 val catsV = "2.7.0"
 val catsEffectV = "3.3.12"
 
-val otel4sV = "0.0-d3796fb-20220613T071000Z-SNAPSHOT"
+val otel4sV = "0.0-7f89139-20220613T071957Z-SNAPSHOT"
 
 val munitV = "0.7.29"
 val munitCatsEffectV = "1.0.7"

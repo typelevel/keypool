@@ -1,7 +1,6 @@
 package org.typelevel.keypool.internal
 
 import cats.Monad
-import cats.effect.{Resource, Temporal}
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import org.typelevel.otel4s._
@@ -29,24 +28,9 @@ private[keypool] trait Metrics[F[_]] {
 
   def acquireDuration: Histogram[F, Double]
 
-  private[keypool] final def incIdle: F[Unit] = idle.add(1L)
-  private[keypool] final def decIdle: F[Unit] = idle.add(-1L)
-  private[keypool] final def incInUse: F[Unit] = inUse.add(1L)
-  private[keypool] final def decInUse: F[Unit] = inUse.add(-1L)
-
-  private[keypool] final def recordInUseDuration(implicit F: Temporal[F]): Resource[F, Unit] =
-    Metrics.recordInUseDuration(this)
-
-  private[keypool] final def recordAcquireDuration[A](
-      resource: Resource[F, A]
-  )(implicit F: Temporal[F]): F[(A, F[Unit])] =
-    Metrics.recordAcquireDuration(this, resource)
-
 }
 
 private[keypool] object Metrics {
-
-  private val CauseKey: AttributeKey[String] = AttributeKey.string("cause")
 
   def fromMeterProvider[F[_]: Monad](meterProvider: MeterProvider[F]): F[Metrics[F]] = {
     for {
@@ -87,34 +71,5 @@ private[keypool] object Metrics {
       def acquireDuration: Histogram[F, Double] = acquireDurationHistogram
     }
   }
-
-  private def recordInUseDuration[F[_]](
-      metrics: Metrics[F]
-  )(implicit F: Temporal[F]): Resource[F, Unit] =
-    Resource
-      .makeCase(Temporal[F].monotonic) { case (start, ec) =>
-        for {
-          end <- Temporal[F].monotonic
-          _ <- metrics.inUseDuration.record((end - start).toMillis, causeAttributes(ec): _*)
-        } yield ()
-      }
-      .void
-
-  private def recordAcquireDuration[F[_], A](
-      metrics: Metrics[F],
-      resource: Resource[F, A]
-  )(implicit F: Temporal[F]): F[(A, F[Unit])] =
-    Temporal[F]
-      .timed(resource.allocated)
-      .flatMap { case (acquireTime, r) =>
-        metrics.acquireDuration.record(acquireTime.toMillis).as(r)
-      }
-
-  private def causeAttributes(ec: Resource.ExitCase): List[Attribute[String]] =
-    ec match {
-      case Resource.ExitCase.Succeeded => Nil
-      case Resource.ExitCase.Errored(e) => List(Attribute(CauseKey, e.getClass.getName))
-      case Resource.ExitCase.Canceled => List(Attribute(CauseKey, "canceled"))
-    }
 
 }
