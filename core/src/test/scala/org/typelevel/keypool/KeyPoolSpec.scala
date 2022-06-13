@@ -23,17 +23,13 @@ package org.typelevel.keypool
 
 import cats.syntax.all._
 import cats.effect._
+import cats.effect.std.CountDownLatch
 import scala.concurrent.duration._
 import munit.CatsEffectSuite
-import scala.concurrent.ExecutionContext
 
 class KeypoolSpec extends CatsEffectSuite {
 
-  override val munitExecutionContext: ExecutionContext = ExecutionContext.global
-
   test("Keep Resources marked to be kept") {
-    def nothing(ref: Ref[IO, Int]): IO[Unit] =
-      ref.get.void
     KeyPool
       .Builder(
         (i: Int) => Ref.of[IO, Int](i),
@@ -54,8 +50,6 @@ class KeypoolSpec extends CatsEffectSuite {
   }
 
   test("Delete Resources marked to be deleted") {
-    def nothing(ref: Ref[IO, Int]): IO[Unit] =
-      ref.get.void
     KeyPool
       .Builder(
         (i: Int) => Ref.of[IO, Int](i),
@@ -76,8 +70,6 @@ class KeypoolSpec extends CatsEffectSuite {
   }
 
   test("Delete Resource when pool is full") {
-    def nothing(ref: Ref[IO, Int]): IO[Unit] =
-      ref.get.void
     KeyPool
       .Builder(
         (i: Int) => Ref.of[IO, Int](i),
@@ -101,8 +93,6 @@ class KeypoolSpec extends CatsEffectSuite {
   }
 
   test("Used Resource Cleaned Up By Reaper") {
-    def nothing(ref: Ref[IO, Int]): IO[Unit] =
-      ref.get.void
     KeyPool
       .Builder(
         (i: Int) => Ref.of[IO, Int](i),
@@ -128,9 +118,6 @@ class KeypoolSpec extends CatsEffectSuite {
   }
 
   test("Used Resource Not Cleaned Up if Idle Time has not expired") {
-    def nothing(ref: Ref[IO, Int]): IO[Unit] =
-      ref.get.void
-
     KeyPool
       .Builder(
         (i: Int) => Ref.of[IO, Int](i),
@@ -154,4 +141,33 @@ class KeypoolSpec extends CatsEffectSuite {
         } yield assert(init === 1 && later === 1)
       }
   }
+
+  test("Do not allocate more resources than the maxTotal") {
+    val MaxTotal = 10
+
+    KeyPool
+      .Builder(
+        (i: Int) => Ref.of[IO, Int](i),
+        nothing
+      )
+      .withMaxTotal(MaxTotal)
+      .build
+      .use { pool =>
+        for {
+          cdl <- CountDownLatch[IO](MaxTotal)
+          allocated <- IO.parReplicateAN(MaxTotal)(
+            MaxTotal,
+            pool.take(1).use(_ => cdl.release >> IO.never).start
+          )
+          _ <- cdl.await // make sure the pool is exhausted
+          attempt1 <- pool.take(1).use_.timeout(100.millis).attempt
+          _ <- allocated.traverse(_.cancel)
+          attempt2 <- pool.take(1).use_.timeout(100.millis).attempt
+        } yield assert(attempt1.isLeft && attempt2.isRight)
+      }
+  }
+
+  private def nothing(ref: Ref[IO, Int]): IO[Unit] =
+    ref.get.void
+
 }

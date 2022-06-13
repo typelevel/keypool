@@ -23,13 +23,11 @@ package org.typelevel.keypool
 
 import cats.syntax.all._
 import cats.effect._
+import cats.effect.std.CountDownLatch
 import scala.concurrent.duration._
 import munit.CatsEffectSuite
-import scala.concurrent.ExecutionContext
 
 class PoolSpec extends CatsEffectSuite {
-
-  override val munitExecutionContext: ExecutionContext = ExecutionContext.global
 
   test("Keep Resources marked to be kept") {
     Pool
@@ -133,6 +131,31 @@ class PoolSpec extends CatsEffectSuite {
           _ <- Temporal[IO].sleep(6.seconds)
           later <- pool.state
         } yield assert(init.total === 1 && later.total === 1)
+      }
+  }
+
+  test("Do not allocate more resources than the maxTotal") {
+    val MaxTotal = 10
+
+    Pool
+      .Builder(
+        Ref.of[IO, Int](1),
+        nothing
+      )
+      .withMaxTotal(MaxTotal)
+      .build
+      .use { pool =>
+        for {
+          cdl <- CountDownLatch[IO](MaxTotal)
+          allocated <- IO.parReplicateAN(MaxTotal)(
+            MaxTotal,
+            pool.take.use(_ => cdl.release >> IO.never).start
+          )
+          _ <- cdl.await // make sure the pool is exhausted
+          attempt1 <- pool.take.use_.timeout(100.millis).attempt
+          _ <- allocated.traverse(_.cancel)
+          attempt2 <- pool.take.use_.timeout(100.millis).attempt
+        } yield assert(attempt1.isLeft && attempt2.isRight)
       }
   }
 

@@ -3,7 +3,7 @@ import com.typesafe.tools.mima.core._
 val Scala213 = "2.13.8"
 
 ThisBuild / tlBaseVersion := "0.4"
-ThisBuild / crossScalaVersions := Seq("2.12.15", Scala213, "3.0.2")
+ThisBuild / crossScalaVersions := Seq("2.12.16", Scala213, "3.0.2")
 ThisBuild / tlVersionIntroduced := Map("3" -> "0.4.3")
 ThisBuild / developers += tlGitHubDev("ChristopherDavenport", "Christopher Davenport")
 ThisBuild / startYear := Some(2019)
@@ -13,7 +13,7 @@ ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/k
 lazy val root = tlCrossRootProject.aggregate(core)
 
 lazy val core = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
+  .crossType(CrossType.Full)
   .in(file("core"))
   .settings(commonSettings)
   .settings(
@@ -26,8 +26,8 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
   .jvmSettings(
     libraryDependencies ++= Seq(
       "org.typelevel"   %% "otel4s-java"               % otel4sV  % Test,
-      "io.opentelemetry" % "opentelemetry-sdk"         % "1.14.0" % Test,
-      "io.opentelemetry" % "opentelemetry-sdk-testing" % "1.14.0" % Test
+      "io.opentelemetry" % "opentelemetry-sdk"         % "1.15.0" % Test,
+      "io.opentelemetry" % "opentelemetry-sdk-testing" % "1.15.0" % Test
     )
   )
   .settings(
@@ -42,7 +42,11 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
       ),
       ProblemFilters.exclude[DirectMissingMethodProblem](
         "org.typelevel.keypool.KeyPool#KeyPoolConcrete.kpDestroy"
-      )
+      ),
+      ProblemFilters
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPoolBuilder.this"),
+      ProblemFilters
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#Builder.this")
     )
   )
 
@@ -55,7 +59,7 @@ lazy val docs = project
 val catsV = "2.7.0"
 val catsEffectV = "3.3.12"
 
-val otel4sV = "0.0-c25617c-20220609T070516Z-SNAPSHOT"
+val otel4sV = "0.0-d3796fb-20220613T071000Z-SNAPSHOT"
 
 val munitV = "0.7.29"
 val munitCatsEffectV = "1.0.7"
@@ -68,9 +72,8 @@ lazy val commonSettings = Seq(
   Test / parallelExecution := false,
   libraryDependencies ++= Seq(
     "org.typelevel" %%% "cats-core"           % catsV,
-    "org.typelevel" %%% "cats-effect-kernel"  % catsEffectV,
+    "org.typelevel" %%% "cats-effect-std"     % catsEffectV,
     "org.typelevel" %%% "otel4s-core"         % otel4sV,
-    "org.typelevel" %%% "cats-effect-std"     % catsEffectV      % Test,
     "org.scalameta" %%% "munit"               % munitV           % Test,
     "org.typelevel" %%% "munit-cats-effect-3" % munitCatsEffectV % Test
   )
