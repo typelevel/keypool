@@ -25,9 +25,8 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
   )
   .jvmSettings(
     libraryDependencies ++= Seq(
-      "org.typelevel"   %% "otel4s-java"               % otel4sV  % Test,
-      "io.opentelemetry" % "opentelemetry-sdk"         % "1.15.0" % Test,
-      "io.opentelemetry" % "opentelemetry-sdk-testing" % "1.15.0" % Test
+      "org.typelevel" %% "otel4s-java"    % otel4sV % Test,
+      "org.typelevel" %% "otel4s-testkit" % otel4sV % Test
     )
   )
   .settings(
@@ -59,7 +58,7 @@ lazy val docs = project
 val catsV = "2.7.0"
 val catsEffectV = "3.3.12"
 
-val otel4sV = "0.0-7f89139-20220613T071957Z-SNAPSHOT"
+val otel4sV = "0.0-e63fe8a-20220618T140401Z-SNAPSHOT"
 
 val munitV = "0.7.29"
 val munitCatsEffectV = "1.0.7"
