@@ -24,11 +24,12 @@ package org.typelevel.keypool
 import cats.syntax.all._
 import cats.effect._
 import cats.effect.std.CountDownLatch
+import cats.effect.testkit.TestControl
+
 import scala.concurrent.duration._
 import munit.CatsEffectSuite
 
-class KeypoolSpec extends CatsEffectSuite {
-
+class KeyPoolSpec extends CatsEffectSuite {
   test("Keep Resources marked to be kept") {
     KeyPool
       .Builder(
@@ -93,28 +94,36 @@ class KeypoolSpec extends CatsEffectSuite {
   }
 
   test("Used Resource Cleaned Up By Reaper") {
-    KeyPool
-      .Builder(
-        (i: Int) => Ref.of[IO, Int](i),
-        nothing
+    def program(ref: Ref[IO, Int]) =
+      TestControl.executeEmbed(
+        KeyPool
+          .Builder(
+            (i: Int) => Ref.of[IO, Int](i),
+            nothing
+          )
+          .withDefaultReuseState(Reusable.Reuse)
+          .withIdleTimeAllowedInPool(Duration.Zero)
+          .withMaxPerKey(Function.const(1))
+          .withMaxTotal(1)
+          .withOnReaperException(_ => IO.unit)
+          .build
+          .use(k =>
+            for {
+              _ <- k
+                .take(1)
+                .use(_ => IO.unit)
+              _ <- k.state.map(_._1).flatMap(i => ref.set(i))
+              _ <- Temporal[IO].sleep(6.second)
+              _ <- k.state.map(_._1).flatMap(i => ref.set(i))
+            } yield ()
+          )
       )
-      .withDefaultReuseState(Reusable.Reuse)
-      .withIdleTimeAllowedInPool(Duration.Zero)
-      .withMaxPerKey(Function.const(1))
-      .withMaxTotal(1)
-      .withOnReaperException((_: Throwable) => IO.unit)
-      .build
-      .use { k =>
-        val action = k
-          .take(1)
-          .use(_ => IO.unit)
-        for {
-          _ <- action
-          init <- k.state.map(_._1)
-          _ <- Temporal[IO].sleep(6.seconds)
-          later <- k.state.map(_._1)
-        } yield assert(init === 1 && later === 0)
-      }
+
+    for {
+      ref <- Ref.of[IO, Int](-1)
+      _ <- program(ref)
+      result <- ref.get
+    } yield assert(result === 0)
   }
 
   test("Used Resource Not Cleaned Up if Idle Time has not expired") {
