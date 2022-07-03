@@ -56,7 +56,7 @@ lazy val docs = project
   .enablePlugins(TypelevelSitePlugin)
 
 val catsV = "2.7.0"
-val catsEffectV = "3.3.12"
+val catsEffectV = "3.3.13"
 
 val otel4sV = "0.0-e63fe8a-20220618T140401Z-SNAPSHOT"
 
@@ -73,6 +73,7 @@ lazy val commonSettings = Seq(
     "org.typelevel" %%% "cats-core"           % catsV,
     "org.typelevel" %%% "cats-effect-std"     % catsEffectV,
     "org.typelevel" %%% "otel4s-core"         % otel4sV,
+    "org.typelevel" %%% "cats-effect-testkit" % catsEffectV      % Test,
     "org.scalameta" %%% "munit"               % munitV           % Test,
     "org.typelevel" %%% "munit-cats-effect-3" % munitCatsEffectV % Test
   )
