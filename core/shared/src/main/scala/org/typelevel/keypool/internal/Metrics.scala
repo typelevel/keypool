@@ -3,7 +3,7 @@ package org.typelevel.keypool.internal
 import cats.Monad
 import cats.syntax.functor._
 import cats.syntax.flatMap._
-import org.typelevel.otel4s._
+import org.typelevel.otel4s.metrics._
 
 private[keypool] trait Metrics[F[_]] {
 

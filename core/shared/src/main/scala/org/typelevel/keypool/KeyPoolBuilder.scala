@@ -27,7 +27,7 @@ import cats.syntax.all._
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.spawn._
 import cats.effect.std.Semaphore
-import org.typelevel.otel4s.MeterProvider
+import org.typelevel.otel4s.metrics.MeterProvider
 import scala.concurrent.duration._
 
 @deprecated("use KeyPool.Builder", "0.4.7")

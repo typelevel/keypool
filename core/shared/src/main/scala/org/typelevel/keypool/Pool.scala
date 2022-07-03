@@ -24,7 +24,7 @@ package org.typelevel.keypool
 import cats._
 import cats.effect.kernel._
 import cats.syntax.all._
-import org.typelevel.otel4s.MeterProvider
+import org.typelevel.otel4s.metrics.MeterProvider
 import scala.concurrent.duration._
 
 /**

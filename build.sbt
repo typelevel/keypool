@@ -58,7 +58,7 @@ lazy val docs = project
 val catsV = "2.7.0"
 val catsEffectV = "3.3.13"
 
-val otel4sV = "0.0-e63fe8a-20220618T140401Z-SNAPSHOT"
+val otel4sV = "0.0-53d0a08-20220703T071423Z-SNAPSHOT"
 
 val munitV = "0.7.29"
 val munitCatsEffectV = "1.0.7"

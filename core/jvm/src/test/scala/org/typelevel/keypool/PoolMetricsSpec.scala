@@ -1,6 +1,7 @@
 package org.typelevel.keypool
 
 import cats.effect._
+import cats.effect.testkit._
 import io.opentelemetry.sdk.metrics.{
   Aggregation,
   InstrumentSelector,
@@ -9,8 +10,9 @@ import io.opentelemetry.sdk.metrics.{
   View
 }
 import munit.CatsEffectSuite
-import org.typelevel.otel4s.{MeterProvider, Otel4s}
+import org.typelevel.otel4s.Otel4s
 import org.typelevel.otel4s.java.OtelJava
+import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.testkit.{HistogramPointData, Metric, MetricData, Sdk}
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
@@ -84,15 +86,17 @@ class PoolMetricsSpec extends CatsEffectSuite {
   }
 
   test("Idle: decrement on reaper cleanup") {
-    poolTest(_.withMaxIdle(1).withIdleTimeAllowedInPool(1.second)) { (sdk, pool) =>
-      for {
-        inUse <- pool.take.use(_ => sdk.snapshot)
-        afterUse <- sdk.snapshot
-        afterSleep <- sdk.snapshot.delayBy(6.seconds)
-      } yield {
-        assertEquals(inUse.idle, Nil)
-        assertEquals(afterUse.idle, List(1L))
-        assertEquals(afterSleep.idle, List(0L))
+    TestControl.executeEmbed {
+      poolTest(_.withMaxIdle(1).withIdleTimeAllowedInPool(1.second)) { (sdk, pool) =>
+        for {
+          inUse <- pool.take.use(_ => sdk.snapshot)
+          afterUse <- sdk.snapshot
+          afterSleep <- sdk.snapshot.delayBy(6.seconds)
+        } yield {
+          assertEquals(inUse.idle, Nil)
+          assertEquals(afterUse.idle, List(1L))
+          assertEquals(afterSleep.idle, List(0L))
+        }
       }
     }
   }
@@ -100,32 +104,37 @@ class PoolMetricsSpec extends CatsEffectSuite {
   test("Generate valid metric snapshots") {
     val sdk = createSdk
 
-    mkPool(sdk.otel.meterProvider)
-      .use(pool => pool.take.use(_ => sdk.snapshot.delayBy(500.millis)).product(sdk.snapshot))
-      .map { case (inUse, afterUse) =>
-        val acquireDuration =
-          List(HistogramPointData(0, 1, HistogramBuckets, List(0, 1, 0, 0, 0)))
+    TestControl.executeEmbed {
+      mkPool(sdk.otel.meterProvider)
+        .use(pool => pool.take.use(_ => sdk.snapshot.delayBy(500.millis)).product(sdk.snapshot))
+        .map { case (inUse, afterUse) =>
+          val acquireDuration =
+            List(
+              HistogramPointData(0, 1, HistogramBuckets, List(1, 0, 0, 0, 0))
+            )
 
-        val expectedInUse = MetricsSnapshot(
-          idle = Nil,
-          inUse = List(1),
-          inUseDuration = Nil,
-          acquiredTotal = List(1),
-          acquireDuration = acquireDuration
-        )
+          val expectedInUse = MetricsSnapshot(
+            idle = Nil,
+            inUse = List(1),
+            inUseDuration = Nil,
+            acquiredTotal = List(1),
+            acquireDuration = acquireDuration
+          )
 
-        val expectedAfterUser = MetricsSnapshot(
-          idle = List(1),
-          inUse = List(0),
-          inUseDuration = List(HistogramPointData(0, 1, HistogramBuckets, List(0, 0, 0, 1, 0))),
-          acquiredTotal = List(1),
-          acquireDuration = acquireDuration
-        )
+          val expectedAfterUser = MetricsSnapshot(
+            idle = List(1),
+            inUse = List(0),
+            inUseDuration = List(
+              HistogramPointData(500.0, 1, HistogramBuckets, List(0, 0, 0, 1, 0))
+            ),
+            acquiredTotal = List(1),
+            acquireDuration = acquireDuration
+          )
 
-        assertEquals(inUse.zeroSumHistogram, expectedInUse)
-        assertEquals(afterUse.zeroSumHistogram, expectedAfterUser)
-        assert(afterUse.inUseDuration.forall(r => r.sum >= 500 && r.sum <= 700))
-      }
+          assertEquals(inUse, expectedInUse)
+          assertEquals(afterUse, expectedAfterUser)
+        }
+    }
   }
 
   private def poolTest(
@@ -221,13 +230,6 @@ object PoolMetricsSpec {
       inUseDuration: List[HistogramPointData],
       acquiredTotal: List[Long],
       acquireDuration: List[HistogramPointData]
-  ) {
-    // use 0 for `histogram#sum` to simplify the comparison
-    def zeroSumHistogram: MetricsSnapshot =
-      copy(
-        inUseDuration = inUseDuration.map(_.copy(sum = 0)),
-        acquireDuration = acquireDuration.map(_.copy(sum = 0))
-      )
-  }
+  )
 
 }

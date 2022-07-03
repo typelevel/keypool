@@ -29,7 +29,7 @@ import cats.effect.std.Semaphore
 import cats.syntax.all._
 import scala.concurrent.duration._
 import org.typelevel.keypool.internal._
-import org.typelevel.otel4s.MeterProvider
+import org.typelevel.otel4s.metrics.MeterProvider
 
 /**
  * This pools internal guarantees are that the max number of values are in the pool at any time, not
