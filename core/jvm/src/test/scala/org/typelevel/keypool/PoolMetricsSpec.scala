@@ -34,7 +34,7 @@ import munit.CatsEffectSuite
 import org.typelevel.otel4s.Otel4s
 import org.typelevel.otel4s.java.OtelJava
 import org.typelevel.otel4s.metrics.MeterProvider
-import org.typelevel.otel4s.testkit.{HistogramPointData, Metric, MetricData, Sdk}
+import org.typelevel.otel4s.testkit.{HistogramPointData, MetricData, Sdk}
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 import scala.util.control.NoStackTrace
@@ -131,7 +131,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
         .map { case (inUse, afterUse) =>
           val acquireDuration =
             List(
-              HistogramPointData(0, 1, HistogramBuckets, List(1, 0, 0, 0, 0))
+              new HistogramPointData(0, 1, HistogramBuckets, List(1, 0, 0, 0, 0))
             )
 
           val expectedInUse = MetricsSnapshot(
@@ -146,7 +146,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
             idle = List(1),
             inUse = List(0),
             inUseDuration = List(
-              HistogramPointData(500.0, 1, HistogramBuckets, List(0, 0, 0, 1, 0))
+              new HistogramPointData(500.0, 1, HistogramBuckets, List(0, 0, 0, 1, 0))
             ),
             acquiredTotal = List(1),
             acquireDuration = acquireDuration
@@ -203,19 +203,19 @@ class PoolMetricsSpec extends CatsEffectSuite {
         } yield {
           def counterValue(name: String): List[Long] =
             metrics
-              .collectFirst {
-                case Metric(metricName, _, _, _, _, MetricData.LongSum(points))
-                    if metricName == name =>
-                  points.map(_.value)
+              .find(_.name == name)
+              .map(_.data)
+              .collectFirst { case MetricData.LongSum(points) =>
+                points.map(_.value)
               }
               .getOrElse(Nil)
 
           def histogramSnapshot(name: String): List[HistogramPointData] =
             metrics
-              .collectFirst {
-                case Metric(metricName, _, _, _, _, h: MetricData.Histogram)
-                    if metricName == name =>
-                  h.points.map(_.value)
+              .find(_.name == name)
+              .map(_.data)
+              .collectFirst { case MetricData.Histogram(points) =>
+                points.map(_.value)
               }
               .getOrElse(Nil)
 

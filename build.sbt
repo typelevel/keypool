@@ -3,7 +3,7 @@ import com.typesafe.tools.mima.core._
 val Scala213 = "2.13.8"
 
 ThisBuild / tlBaseVersion := "0.4"
-ThisBuild / crossScalaVersions := Seq("2.12.16", Scala213, "3.0.2")
+ThisBuild / crossScalaVersions := Seq("2.12.16", Scala213, "3.1.2")
 ThisBuild / tlVersionIntroduced := Map("3" -> "0.4.3")
 ThisBuild / developers += tlGitHubDev("ChristopherDavenport", "Christopher Davenport")
 ThisBuild / startYear := Some(2019)
@@ -58,7 +58,7 @@ lazy val docs = project
 val catsV = "2.7.0"
 val catsEffectV = "3.3.13"
 
-val otel4sV = "0.0-53d0a08-20220703T071423Z-SNAPSHOT"
+val otel4sV = "0.0-2daac91-SNAPSHOT"
 
 val munitV = "0.7.29"
 val munitCatsEffectV = "1.0.7"
@@ -69,6 +69,7 @@ val betterMonadicForV = "0.3.1"
 // General Settings
 lazy val commonSettings = Seq(
   Test / parallelExecution := false,
+  resolvers += "Sonatype OSS Snapshots" at "https://s01.oss.sonatype.org/content/repositories/snapshots",
   libraryDependencies ++= Seq(
     "org.typelevel" %%% "cats-core"           % catsV,
     "org.typelevel" %%% "cats-effect-std"     % catsEffectV,
