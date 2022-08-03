@@ -69,7 +69,7 @@ val betterMonadicForV = "0.3.1"
 // General Settings
 lazy val commonSettings = Seq(
   Test / parallelExecution := false,
-  resolvers += "Sonatype OSS Snapshots" at "https://s01.oss.sonatype.org/content/repositories/snapshots",
+  resolvers ++= Resolver.sonatypeOssRepos("snapshots"),
   libraryDependencies ++= Seq(
     "org.typelevel" %%% "cats-core"           % catsV,
     "org.typelevel" %%% "cats-effect-std"     % catsEffectV,
