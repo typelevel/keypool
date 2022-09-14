@@ -53,10 +53,10 @@ lazy val docs = project
   .enablePlugins(TypelevelSitePlugin)
 
 val catsV = "2.8.0"
-val catsEffectV = "3.3.14-1-5d11fe9"
+val catsEffectV = "3.3.14"
 
 val munitV = "1.0.0-M6"
-val munitCatsEffectV = "2.0-5e03bfc"
+val munitCatsEffectV = "2.0.0-M3"
 
 val kindProjectorV = "0.13.2"
 val betterMonadicForV = "0.3.1"
