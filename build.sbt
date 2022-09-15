@@ -12,7 +12,7 @@ ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/k
 
 lazy val root = tlCrossRootProject.aggregate(core)
 
-lazy val core = crossProject(JVMPlatform, JSPlatform)
+lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("core"))
   .settings(commonSettings)
@@ -22,6 +22,9 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
   )
   .jsSettings(
     tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.6").toMap
+  )
+  .nativeSettings(
+    tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.8").toMap
   )
   .settings(
     mimaBinaryIssueFilters ++= Seq(
@@ -52,8 +55,8 @@ lazy val docs = project
 val catsV = "2.8.0"
 val catsEffectV = "3.3.14"
 
-val munitV = "0.7.29"
-val munitCatsEffectV = "1.0.7"
+val munitV = "1.0.0-M6"
+val munitCatsEffectV = "2.0.0-M3"
 
 val kindProjectorV = "0.13.2"
 val betterMonadicForV = "0.3.1"
@@ -66,6 +69,6 @@ lazy val commonSettings = Seq(
     "org.typelevel" %%% "cats-effect-std"     % catsEffectV,
     "org.typelevel" %%% "cats-effect-testkit" % catsEffectV      % Test,
     "org.scalameta" %%% "munit"               % munitV           % Test,
-    "org.typelevel" %%% "munit-cats-effect-3" % munitCatsEffectV % Test
+    "org.typelevel" %%% "munit-cats-effect"   % munitCatsEffectV % Test
   )
 )
