@@ -1,9 +1,10 @@
 import com.typesafe.tools.mima.core._
 
 val Scala213 = "2.13.10"
+val Scala3 = "3.2.1"
 
 ThisBuild / tlBaseVersion := "0.4"
-ThisBuild / crossScalaVersions := Seq("2.12.17", Scala213, "3.1.3")
+ThisBuild / crossScalaVersions := Seq("2.12.17", Scala213, Scala3)
 ThisBuild / tlVersionIntroduced := Map("3" -> "0.4.3")
 ThisBuild / developers += tlGitHubDev("ChristopherDavenport", "Christopher Davenport")
 ThisBuild / startYear := Some(2019)
