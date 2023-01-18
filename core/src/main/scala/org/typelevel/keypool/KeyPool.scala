@@ -295,11 +295,19 @@ object KeyPool {
           }
       }
 
+    def createWithPermit: Resource[F, B] =
+      kp.kpMaxTotalSem.tryPermit.flatMap {
+        case true =>
+          kp.kpRes(k)
+        case false =>
+          ApplicativeThrow[Resource[F, *]].raiseError(
+            new NoSuchElementException("Pool is maxed out on idle connections for other keys"))
+      }
+
     for {
-      _ <- kp.kpMaxTotalSem.permit
       optR <- Resource.eval(kp.kpVar.modify(go))
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
-      resource <- Resource.make(optR.fold(kp.kpRes(k).allocated)(r => Applicative[F].pure(r))) {
+      resource <- Resource.make(optR.fold(createWithPermit.allocated)(r => Applicative[F].pure(r))) {
         resource =>
           for {
             reusable <- releasedState.get
