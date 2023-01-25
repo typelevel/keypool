@@ -34,7 +34,7 @@ import munit.CatsEffectSuite
 import org.typelevel.otel4s.Otel4s
 import org.typelevel.otel4s.java.OtelJava
 import org.typelevel.otel4s.metrics.MeterProvider
-import org.typelevel.otel4s.testkit.{HistogramPointData, MetricData, Sdk}
+import org.typelevel.otel4s.testkit.metrics.{HistogramPointData, MetricData, MetricsSdk}
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 import scala.util.control.NoStackTrace
@@ -43,11 +43,11 @@ class PoolMetricsSpec extends CatsEffectSuite {
   import PoolMetricsSpec._
 
   test("Metrics should be empty for unused pool") {
-    val sdk = createSdk
     val expectedSnapshot =
       MetricsSnapshot(Nil, Nil, Nil, Nil, Nil)
 
     for {
+      sdk <- createSdk
       snapshot <- mkPool(sdk.otel.meterProvider).use(_ => sdk.snapshot)
     } yield assertEquals(snapshot, expectedSnapshot)
   }
@@ -123,50 +123,50 @@ class PoolMetricsSpec extends CatsEffectSuite {
   }
 
   test("Generate valid metric snapshots") {
-    val sdk = createSdk
-
     TestControl.executeEmbed {
-      mkPool(sdk.otel.meterProvider)
-        .use(pool => pool.take.use(_ => sdk.snapshot.delayBy(500.millis)).product(sdk.snapshot))
-        .map { case (inUse, afterUse) =>
-          val acquireDuration =
-            List(
-              new HistogramPointData(0, 1, HistogramBuckets, List(1, 0, 0, 0, 0))
+      createSdk.flatMap { sdk =>
+        mkPool(sdk.otel.meterProvider)
+          .use(pool => pool.take.use(_ => sdk.snapshot.delayBy(500.millis)).product(sdk.snapshot))
+          .map { case (inUse, afterUse) =>
+            val acquireDuration =
+              List(
+                new HistogramPointData(0, 1, HistogramBuckets, List(1, 0, 0, 0, 0))
+              )
+
+            val expectedInUse = MetricsSnapshot(
+              idle = Nil,
+              inUse = List(1),
+              inUseDuration = Nil,
+              acquiredTotal = List(1),
+              acquireDuration = acquireDuration
             )
 
-          val expectedInUse = MetricsSnapshot(
-            idle = Nil,
-            inUse = List(1),
-            inUseDuration = Nil,
-            acquiredTotal = List(1),
-            acquireDuration = acquireDuration
-          )
+            val expectedAfterUser = MetricsSnapshot(
+              idle = List(1),
+              inUse = List(0),
+              inUseDuration = List(
+                new HistogramPointData(500.0, 1, HistogramBuckets, List(0, 0, 0, 1, 0))
+              ),
+              acquiredTotal = List(1),
+              acquireDuration = acquireDuration
+            )
 
-          val expectedAfterUser = MetricsSnapshot(
-            idle = List(1),
-            inUse = List(0),
-            inUseDuration = List(
-              new HistogramPointData(500.0, 1, HistogramBuckets, List(0, 0, 0, 1, 0))
-            ),
-            acquiredTotal = List(1),
-            acquireDuration = acquireDuration
-          )
-
-          assertEquals(inUse, expectedInUse)
-          assertEquals(afterUse, expectedAfterUser)
-        }
+            assertEquals(inUse, expectedInUse)
+            assertEquals(afterUse, expectedAfterUser)
+          }
+      }
     }
   }
 
   private def poolTest(
       customize: Pool.Builder[IO, Ref[IO, Int]] => Pool.Builder[IO, Ref[IO, Int]] = identity
   )(scenario: (OtelSdk[IO], Pool[IO, Ref[IO, Int]]) => IO[Unit]): IO[Unit] = {
-    val sdk = createSdk
+    createSdk.flatMap { sdk =>
+      val builder =
+        Pool.Builder(Ref.of[IO, Int](1), nothing).withMeterProvider(sdk.otel.meterProvider)
 
-    val builder =
-      Pool.Builder(Ref.of[IO, Int](1), nothing).withMeterProvider(sdk.otel.meterProvider)
-
-    customize(builder).build.use(pool => scenario(sdk, pool))
+      customize(builder).build.use(pool => scenario(sdk, pool))
+    }
   }
 
   private def mkPool(meterProvider: MeterProvider[IO]) =
@@ -179,7 +179,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
       .withMaxTotal(10)
       .build
 
-  private def createSdk: OtelSdk[IO] = {
+  private def createSdk: IO[OtelSdk[IO]] = {
     def customize(builder: SdkMeterProviderBuilder) =
       builder
         .registerView(
@@ -192,41 +192,43 @@ class PoolMetricsSpec extends CatsEffectSuite {
             .build()
         )
 
-    val sdk = Sdk.create[IO](customize)
+    val sdk = MetricsSdk.create[IO](customize)
 
-    new OtelSdk[IO] {
-      val otel: Otel4s[IO] = OtelJava.forSync[IO](sdk.sdk)
+    OtelJava.forSync[IO](sdk.sdk).map { otel4s =>
+      new OtelSdk[IO] {
+        val otel: Otel4s[IO] = otel4s
 
-      def snapshot: IO[MetricsSnapshot] =
-        for {
-          metrics <- sdk.metrics
-        } yield {
-          def counterValue(name: String): List[Long] =
-            metrics
-              .find(_.name == name)
-              .map(_.data)
-              .collectFirst { case MetricData.LongSum(points) =>
-                points.map(_.value)
-              }
-              .getOrElse(Nil)
+        def snapshot: IO[MetricsSnapshot] =
+          for {
+            metrics <- sdk.metrics
+          } yield {
+            def counterValue(name: String): List[Long] =
+              metrics
+                .find(_.name == name)
+                .map(_.data)
+                .collectFirst { case MetricData.LongSum(points) =>
+                  points.map(_.value)
+                }
+                .getOrElse(Nil)
 
-          def histogramSnapshot(name: String): List[HistogramPointData] =
-            metrics
-              .find(_.name == name)
-              .map(_.data)
-              .collectFirst { case MetricData.Histogram(points) =>
-                points.map(_.value)
-              }
-              .getOrElse(Nil)
+            def histogramSnapshot(name: String): List[HistogramPointData] =
+              metrics
+                .find(_.name == name)
+                .map(_.data)
+                .collectFirst { case MetricData.Histogram(points) =>
+                  points.map(_.value)
+                }
+                .getOrElse(Nil)
 
-          MetricsSnapshot(
-            counterValue("idle"),
-            counterValue("in_use"),
-            histogramSnapshot("in_use_duration"),
-            counterValue("acquired_total"),
-            histogramSnapshot("acquire_duration")
-          )
-        }
+            MetricsSnapshot(
+              counterValue("idle"),
+              counterValue("in_use"),
+              histogramSnapshot("in_use_duration"),
+              counterValue("acquired_total"),
+              histogramSnapshot("acquire_duration")
+            )
+          }
+      }
     }
   }
 
