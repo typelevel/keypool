@@ -1,9 +1,10 @@
 import com.typesafe.tools.mima.core._
 
-val Scala213 = "2.13.8"
+val Scala213 = "2.13.10"
+val Scala3 = "3.2.1"
 
 ThisBuild / tlBaseVersion := "0.4"
-ThisBuild / crossScalaVersions := Seq("2.12.16", Scala213, "3.1.3")
+ThisBuild / crossScalaVersions := Seq("2.12.17", Scala213, Scala3)
 ThisBuild / tlVersionIntroduced := Map("3" -> "0.4.3")
 ThisBuild / developers += tlGitHubDev("ChristopherDavenport", "Christopher Davenport")
 ThisBuild / startYear := Some(2019)
@@ -12,7 +13,7 @@ ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/k
 
 lazy val root = tlCrossRootProject.aggregate(core)
 
-lazy val core = crossProject(JVMPlatform, JSPlatform)
+lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Full)
   .in(file("core"))
   .settings(commonSettings)
@@ -28,6 +29,9 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
       "org.typelevel" %% "otel4s-java"    % otel4sV % Test,
       "org.typelevel" %% "otel4s-testkit" % otel4sV % Test
     )
+  )
+  .nativeSettings(
+    tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.8").toMap
   )
   .settings(
     mimaBinaryIssueFilters ++= Seq(
@@ -55,13 +59,13 @@ lazy val docs = project
   .dependsOn(core.jvm)
   .enablePlugins(TypelevelSitePlugin)
 
-val catsV = "2.8.0"
-val catsEffectV = "3.3.14"
+val catsV = "2.9.0"
+val catsEffectV = "3.4.5"
 
-val otel4sV = "0.0-2daac91-SNAPSHOT"
+val otel4sV = "0.0-9193d5a-SNAPSHOT"
 
-val munitV = "0.7.29"
-val munitCatsEffectV = "1.0.7"
+val munitV = "1.0.0-M7"
+val munitCatsEffectV = "2.0.0-M3"
 
 val kindProjectorV = "0.13.2"
 val betterMonadicForV = "0.3.1"
@@ -76,6 +80,6 @@ lazy val commonSettings = Seq(
     "org.typelevel" %%% "otel4s-core"         % otel4sV,
     "org.typelevel" %%% "cats-effect-testkit" % catsEffectV      % Test,
     "org.scalameta" %%% "munit"               % munitV           % Test,
-    "org.typelevel" %%% "munit-cats-effect-3" % munitCatsEffectV % Test
+    "org.typelevel" %%% "munit-cats-effect"   % munitCatsEffectV % Test
   )
 )
