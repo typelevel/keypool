@@ -62,7 +62,7 @@ lazy val docs = project
 val catsV = "2.9.0"
 val catsEffectV = "3.4.6"
 
-val otel4sV = "0.0-9193d5a-SNAPSHOT"
+val otel4sV = "0.1.0"
 
 val munitV = "1.0.0-M7"
 val munitCatsEffectV = "2.0.0-M3"
@@ -73,7 +73,6 @@ val betterMonadicForV = "0.3.1"
 // General Settings
 lazy val commonSettings = Seq(
   Test / parallelExecution := false,
-  resolvers ++= Resolver.sonatypeOssRepos("snapshots"),
   libraryDependencies ++= Seq(
     "org.typelevel" %%% "cats-core"           % catsV,
     "org.typelevel" %%% "cats-effect-std"     % catsEffectV,
