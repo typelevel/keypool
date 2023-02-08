@@ -1,7 +1,7 @@
 import com.typesafe.tools.mima.core._
 
 val Scala213 = "2.13.10"
-val Scala3 = "3.2.1"
+val Scala3 = "3.2.2"
 
 ThisBuild / tlBaseVersion := "0.4"
 ThisBuild / crossScalaVersions := Seq("2.12.17", Scala213, Scala3)
@@ -60,7 +60,7 @@ lazy val docs = project
   .enablePlugins(TypelevelSitePlugin)
 
 val catsV = "2.9.0"
-val catsEffectV = "3.4.5"
+val catsEffectV = "3.4.6"
 
 val otel4sV = "0.0-9193d5a-SNAPSHOT"
 
