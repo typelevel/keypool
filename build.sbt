@@ -14,7 +14,7 @@ ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/k
 lazy val root = tlCrossRootProject.aggregate(core)
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
-  .crossType(CrossType.Pure)
+  .crossType(CrossType.Full)
   .in(file("core"))
   .settings(commonSettings)
   .settings(
@@ -23,6 +23,12 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   )
   .jsSettings(
     tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.6").toMap
+  )
+  .jvmSettings(
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "otel4s-java"    % otel4sV % Test,
+      "org.typelevel" %% "otel4s-testkit" % otel4sV % Test
+    )
   )
   .nativeSettings(
     tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.8").toMap
@@ -56,6 +62,8 @@ lazy val docs = project
 val catsV = "2.9.0"
 val catsEffectV = "3.4.10"
 
+val otel4sV = "0.1.0"
+
 val munitV = "1.0.0-M7"
 val munitCatsEffectV = "2.0.0-M3"
 
@@ -68,6 +76,7 @@ lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
     "org.typelevel" %%% "cats-core"           % catsV,
     "org.typelevel" %%% "cats-effect-std"     % catsEffectV,
+    "org.typelevel" %%% "otel4s-core"         % otel4sV,
     "org.typelevel" %%% "cats-effect-testkit" % catsEffectV      % Test,
     "org.scalameta" %%% "munit"               % munitV           % Test,
     "org.typelevel" %%% "munit-cats-effect"   % munitCatsEffectV % Test

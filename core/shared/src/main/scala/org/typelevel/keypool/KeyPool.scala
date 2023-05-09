@@ -21,6 +21,7 @@
 
 package org.typelevel.keypool
 
+import java.util.concurrent.TimeUnit
 import cats._
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.spawn._
@@ -28,6 +29,7 @@ import cats.effect.std.Semaphore
 import cats.syntax.all._
 import scala.concurrent.duration._
 import org.typelevel.keypool.internal._
+import org.typelevel.otel4s.metrics.MeterProvider
 
 /**
  * This pools internal guarantees are that the max number of values are in the pool at any time, not
@@ -68,7 +70,8 @@ object KeyPool {
       private[keypool] val kpMaxIdle: Int,
       private[keypool] val kpMaxTotal: Int,
       private[keypool] val kpMaxTotalSem: Semaphore[F],
-      private[keypool] val kpVar: Ref[F, PoolMap[A, (B, F[Unit])]]
+      private[keypool] val kpVar: Ref[F, PoolMap[A, (B, F[Unit])]],
+      private[keypool] val kpMetrics: Metrics[F]
   ) extends KeyPool[F, A, B] {
 
     def take(k: A): Resource[F, Managed[F, B]] =
@@ -137,6 +140,7 @@ object KeyPool {
   private[keypool] def reap[F[_], A, B](
       idleTimeAllowedInPoolNanos: FiniteDuration,
       kpVar: Ref[F, PoolMap[A, (B, F[Unit])]],
+      metrics: Metrics[F],
       onReaperException: Throwable => F[Unit]
   )(implicit F: Temporal[F]): F[Unit] = {
     // We are going to do non-referentially transparent things as we may be waiting for our modification to go through
@@ -199,7 +203,7 @@ object KeyPool {
               val (m_, toDestroy) = findStale(now, idleCount, m)
               (
                 m_,
-                toDestroy.traverse_(_._2._2).attempt.flatMap {
+                toDestroy.traverse_(r => metrics.idle.dec() >> r._2._2).attempt.flatMap {
                   case Left(t) => onReaperException(t)
                   // .handleErrorWith(t => F.delay(t.printStackTrace())) // CHEATING?
                   case Right(()) => F.unit
@@ -237,7 +241,8 @@ object KeyPool {
       kp: KeyPoolConcrete[F, A, B],
       k: A,
       r: B,
-      destroy: F[Unit]
+      destroy: F[Unit],
+      isFromPool: Boolean
   ): F[Unit] = {
     def addToList[Z](
         now: FiniteDuration,
@@ -254,22 +259,25 @@ object KeyPool {
             else (l, Some(x))
         }
       }
+
+    def decIdle = kp.kpMetrics.idle.dec().whenA(isFromPool)
+
     def go(now: FiniteDuration, pc: PoolMap[A, (B, F[Unit])]): (PoolMap[A, (B, F[Unit])], F[Unit]) =
       pc match {
-        case p @ PoolClosed() => (p, destroy)
+        case p @ PoolClosed() => (p, decIdle >> destroy)
         case p @ PoolOpen(idleCount, m) =>
-          if (idleCount > kp.kpMaxIdle) (p, destroy)
+          if (kp.kpMaxIdle == 0 || idleCount > kp.kpMaxIdle) (p, decIdle >> destroy)
           else
             m.get(k) match {
               case None =>
                 val cnt_ = idleCount + 1
                 val m_ = PoolMap.open(cnt_, m + (k -> One((r, destroy), now)))
-                (m_, Applicative[F].pure(()))
+                (m_, kp.kpMetrics.idle.inc())
               case Some(l) =>
                 val (l_, mx) = addToList(now, kp.kpMaxPerKey(k), (r, destroy), l)
                 val cnt_ = idleCount + mx.fold(1)(_ => 0)
                 val m_ = PoolMap.open(cnt_, m + (k -> l_))
-                (m_, mx.fold(Applicative[F].unit)(_ => destroy))
+                (m_, mx.fold(kp.kpMetrics.idle.inc())(_ => decIdle >> destroy))
             }
       }
 
@@ -295,20 +303,27 @@ object KeyPool {
           }
       }
 
+    def allocateNew: F[(B, F[Unit])] =
+      kp.kpMetrics.acquireDuration
+        .recordDuration(TimeUnit.MILLISECONDS)
+        .use(_ => kp.kpRes(k).allocated)
+
     for {
       _ <- kp.kpMaxTotalSem.permit
       optR <- Resource.eval(kp.kpVar.modify(go))
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
-      resource <- Resource.make(optR.fold(kp.kpRes(k).allocated)(r => Applicative[F].pure(r))) {
-        resource =>
-          for {
-            reusable <- releasedState.get
-            out <- reusable match {
-              case Reusable.Reuse => put(kp, k, resource._1, resource._2).attempt.void
-              case Reusable.DontReuse => resource._2.attempt.void
-            }
-          } yield out
+      resource <- Resource.make(optR.fold(allocateNew)(r => Applicative[F].pure(r))) { resource =>
+        for {
+          reusable <- releasedState.get
+          out <- reusable match {
+            case Reusable.Reuse => put(kp, k, resource._1, resource._2, optR.nonEmpty).attempt.void
+            case Reusable.DontReuse => resource._2.attempt.void
+          }
+        } yield out
       }
+      _ <- Resource.eval(kp.kpMetrics.acquiredTotal.inc().whenA(optR.isEmpty))
+      _ <- Resource.make(kp.kpMetrics.inUse.inc())(_ => kp.kpMetrics.inUse.dec())
+      _ <- kp.kpMetrics.inUseDuration.recordDuration(TimeUnit.MILLISECONDS)
     } yield new Managed(resource._1, optR.isDefined, releasedState)
   }
 
@@ -319,7 +334,8 @@ object KeyPool {
       val kpMaxPerKey: A => Int,
       val kpMaxIdle: Int,
       val kpMaxTotal: Int,
-      val onReaperException: Throwable => F[Unit]
+      val onReaperException: Throwable => F[Unit],
+      val meterProvider: MeterProvider[F]
   ) {
     private def copy(
         kpRes: A => Resource[F, B] = this.kpRes,
@@ -328,7 +344,8 @@ object KeyPool {
         kpMaxPerKey: A => Int = this.kpMaxPerKey,
         kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
-        onReaperException: Throwable => F[Unit] = this.onReaperException
+        onReaperException: Throwable => F[Unit] = this.onReaperException,
+        meterProvider: MeterProvider[F] = this.meterProvider
     ): Builder[F, A, B] = new Builder[F, A, B](
       kpRes,
       kpDefaultReuseState,
@@ -336,7 +353,8 @@ object KeyPool {
       kpMaxPerKey,
       kpMaxIdle,
       kpMaxTotal,
-      onReaperException
+      onReaperException,
+      meterProvider
     )
 
     def doOnCreate(f: B => F[Unit]): Builder[F, A, B] =
@@ -365,6 +383,9 @@ object KeyPool {
     def withOnReaperException(f: Throwable => F[Unit]): Builder[F, A, B] =
       copy(onReaperException = f)
 
+    def withMeterProvider(meterProvider: MeterProvider[F]): Builder[F, A, B] =
+      copy(meterProvider = meterProvider)
+
     def build: Resource[F, KeyPool[F, A, B]] = {
       def keepRunning[Z](fa: F[Z]): F[Z] =
         fa.onError { case e => onReaperException(e) }.attempt >> keepRunning(fa)
@@ -373,10 +394,11 @@ object KeyPool {
           Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
         )(kpVar => KeyPool.destroy(kpVar))
         kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
+        kpMetrics <- Resource.eval(Metrics.fromMeterProvider(meterProvider))
         _ <- idleTimeAllowedInPool match {
           case fd: FiniteDuration =>
             val nanos = 0.seconds.max(fd)
-            keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)).background.void
+            keepRunning(KeyPool.reap(nanos, kpVar, kpMetrics, onReaperException)).background.void
           case _ =>
             Applicative[Resource[F, *]].unit
         }
@@ -387,7 +409,8 @@ object KeyPool {
         kpMaxIdle,
         kpMaxTotal,
         kpMaxTotalSem,
-        kpVar
+        kpVar,
+        kpMetrics
       )
     }
 
@@ -403,7 +426,8 @@ object KeyPool {
       Defaults.maxPerKey,
       Defaults.maxIdle,
       Defaults.maxTotal,
-      Defaults.onReaperException[F]
+      Defaults.onReaperException[F],
+      Defaults.meterProvider
     )
 
     def apply[F[_]: Temporal, A, B](
@@ -421,6 +445,7 @@ object KeyPool {
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)
       }
+      def meterProvider[F[_]: Applicative]: MeterProvider[F] = MeterProvider.noop
     }
   }
 }
