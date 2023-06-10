@@ -1,6 +1,6 @@
 import com.typesafe.tools.mima.core._
 
-val Scala213 = "2.13.10"
+val Scala213 = "2.13.11"
 val Scala3 = "3.3.0"
 
 ThisBuild / tlBaseVersion := "0.4"
