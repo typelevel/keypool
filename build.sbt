@@ -1,6 +1,6 @@
 import com.typesafe.tools.mima.core._
 
-val Scala213 = "2.13.10"
+val Scala213 = "2.13.11"
 val Scala3 = "3.3.0"
 
 ThisBuild / tlBaseVersion := "0.4"
@@ -56,7 +56,7 @@ lazy val docs = project
 val catsV = "2.9.0"
 val catsEffectV = "3.5.0"
 
-val munitV = "1.0.0-M7"
+val munitV = "1.0.0-M8"
 val munitCatsEffectV = "2.0.0-M3"
 
 val kindProjectorV = "0.13.2"
