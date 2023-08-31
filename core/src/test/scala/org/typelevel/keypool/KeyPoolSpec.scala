@@ -176,7 +176,29 @@ class KeyPoolSpec extends CatsEffectSuite {
       }
   }
 
+  test("Do not count idle resources toward maxTotal".only) {
+    final case class Stats(active: Int, highWater: Int) {
+      def inc =
+        copy(active = active + 1, highWater = math.max(active + 1, highWater))
+      def dec =
+        copy(active = active - 1)
+    }
+    IO.ref(Stats(0, 0)).flatMap(active =>
+      KeyPool.Builder((i: Int) =>
+          Resource.make(active.update(_.inc))(i => active.update(_.dec)))
+        .withMaxTotal(5)
+        .withMaxIdle(5)
+        .build
+        .use(keypool =>
+          keypool.take(0).replicateA(5).use_ *>
+          keypool.take(1).replicateA(5).use_
+        )
+        .flatMap(_ => active.get.map(_.highWater))
+        .flatTap(IO.println)
+    )
+    .map(i => assert(i <= 5, s"Active connections maxed out at $i"))
+  }
+
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void
-
 }
