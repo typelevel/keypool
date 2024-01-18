@@ -179,4 +179,12 @@ class KeyPoolSpec extends CatsEffectSuite {
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void
 
+  test("Acquiring from pool is cancelable") {
+    TestControl.executeEmbed {
+      KeyPool.Builder((_: Unit) => Resource.eval(IO.never[Unit])).build.use { pool =>
+        pool.take(()).use_.timeoutTo(1.second, IO.unit)
+      }
+    }
+  }
+
 }

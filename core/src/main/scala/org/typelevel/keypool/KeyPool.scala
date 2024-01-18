@@ -299,15 +299,16 @@ object KeyPool {
       _ <- kp.kpMaxTotalSem.permit
       optR <- Resource.eval(kp.kpVar.modify(go))
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
-      resource <- Resource.make(optR.fold(kp.kpRes(k).allocated)(r => Applicative[F].pure(r))) {
-        resource =>
-          for {
-            reusable <- releasedState.get
-            out <- reusable match {
-              case Reusable.Reuse => put(kp, k, resource._1, resource._2).attempt.void
-              case Reusable.DontReuse => resource._2.attempt.void
-            }
-          } yield out
+      resource <- Resource.makeFull[F, (B, F[Unit])] { poll =>
+        optR.fold(poll(kp.kpRes(k).allocated))(r => Applicative[F].pure(r))
+      } { resource =>
+        for {
+          reusable <- releasedState.get
+          out <- reusable match {
+            case Reusable.Reuse => put(kp, k, resource._1, resource._2).attempt.void
+            case Reusable.DontReuse => resource._2.attempt.void
+          }
+        } yield out
       }
     } yield new Managed(resource._1, optR.isDefined, releasedState)
   }
