@@ -4,7 +4,7 @@ val Scala213 = "2.13.12"
 val Scala3 = "3.3.1"
 
 ThisBuild / tlBaseVersion := "0.4"
-ThisBuild / crossScalaVersions := Seq("2.12.18", Scala213, Scala3)
+ThisBuild / crossScalaVersions := Seq("2.12.19", Scala213, Scala3)
 ThisBuild / tlVersionIntroduced := Map("3" -> "0.4.3")
 ThisBuild / developers += tlGitHubDev("ChristopherDavenport", "Christopher Davenport")
 ThisBuild / startYear := Some(2019)
