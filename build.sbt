@@ -1,7 +1,7 @@
 import com.typesafe.tools.mima.core._
 
 val Scala213 = "2.13.13"
-val Scala3 = "3.3.1"
+val Scala3 = "3.3.3"
 
 ThisBuild / tlBaseVersion := "0.4"
 ThisBuild / crossScalaVersions := Seq("2.12.19", Scala213, Scala3)
