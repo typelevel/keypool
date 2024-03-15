@@ -275,12 +275,12 @@ object KeyPool {
               case None =>
                 val cnt_ = idleCount + 1
                 val m_ = PoolMap.open(cnt_, m + (k -> One((r, destroy), now)))
-                (m_, Function.const(Applicative[F].unit))
+                (m_, Function.const[F[Unit], ExitCase](Applicative[F].unit))
               case Some(l) =>
                 val (l_, mx) = addToList(now, kp.kpMaxPerKey(k), (r, destroy), l)
                 val cnt_ = idleCount + mx.fold(1)(_ => 0)
                 val m_ = PoolMap.open(cnt_, m + (k -> l_))
-                (m_, mx.fold(Function.const(Applicative[F].unit))(_ => destroy))
+                (m_, mx.fold((_: ExitCase) => Applicative[F].unit)(_ => destroy))
             }
       }
 
