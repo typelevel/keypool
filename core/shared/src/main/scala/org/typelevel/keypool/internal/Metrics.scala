@@ -21,76 +21,104 @@
 
 package org.typelevel.keypool.internal
 
+import java.util.concurrent.TimeUnit
+
 import cats.Monad
+import cats.effect.kernel.Resource
 import cats.syntax.functor._
 import cats.syntax.flatMap._
+import org.typelevel.otel4s.Attribute
 import org.typelevel.otel4s.metrics._
 
 private[keypool] trait Metrics[F[_]] {
 
   /**
-   * The '''current''' number of the '''idle''' resources
+   * Increments the number of idle resources.
    */
-  def idle: UpDownCounter[F, Long]
+  def idleInc: F[Unit]
 
   /**
-   * The '''current''' number of the '''borrowed (in use)''' resources
+   * Decrements the number of idle resources.
    */
-  def inUse: UpDownCounter[F, Long]
-
-  def inUseDuration: Histogram[F, Double]
+  def idleDec: F[Unit]
 
   /**
-   * The '''total''' number of the '''acquired''' resources.
-   *
-   * The value can be only incremented.
+   * Records the number of in-use resources.
    */
-  def acquiredTotal: Counter[F, Long]
+  def inUseCount: Resource[F, Unit]
 
-  def acquireDuration: Histogram[F, Double]
+  /**
+   * Records for how long the resource has been in use.
+   */
+  def inUseRecordDuration: Resource[F, Unit]
+
+  /**
+   * Increments the number of acquired resources.
+   */
+  def acquiredTotalInc: F[Unit]
+
+  /**
+   * Records how long does it take to acquire a resource.
+   */
+  def acquireRecordDuration: Resource[F, Unit]
 
 }
 
 private[keypool] object Metrics {
 
-  def fromMeterProvider[F[_]: Monad](meterProvider: MeterProvider[F]): F[Metrics[F]] = {
+  def fromMeterProvider[F[_]: Monad](meterProvider: MeterProvider[F], name: String): F[Metrics[F]] =
     for {
       meter <- meterProvider.get("org.typelevel.keypool")
 
-      idleCounter <- meter
-        .upDownCounter("idle")
+      idle <- meter
+        .upDownCounter[Long]("idle.current")
+        .withUnit("{resource}")
         .withDescription("A current number of idle resources")
         .create
 
-      inUseCounter <- meter
-        .upDownCounter("in_use")
+      inUse <- meter
+        .upDownCounter[Long]("in_use.current")
+        .withUnit("{resource}")
         .withDescription("A current number of resources in use")
         .create
 
-      inUseDurationHistogram <- meter
-        .histogram("in_use_duration")
+      inUseDuration <- meter
+        .histogram[Long]("in_use.duration")
         .withUnit("ms")
         .withDescription("For how long a resource is in use")
         .create
 
-      acquiredCounter <- meter
-        .counter("acquired_total")
+      acquiredTotal <- meter
+        .counter[Long]("acquired.total")
+        .withUnit("{resource}")
         .withDescription("A total number of acquired resources")
         .create
 
-      acquireDurationHistogram <- meter
-        .histogram("acquire_duration")
+      acquireDuration <- meter
+        .histogram[Long]("acquire.duration")
         .withUnit("ms")
         .withDescription("How long does it take to acquire a resource")
         .create
-
     } yield new Metrics[F] {
-      def idle: UpDownCounter[F, Long] = idleCounter
-      def inUse: UpDownCounter[F, Long] = inUseCounter
-      def inUseDuration: Histogram[F, Double] = inUseDurationHistogram
-      def acquiredTotal: Counter[F, Long] = acquiredCounter
-      def acquireDuration: Histogram[F, Double] = acquireDurationHistogram
+      private val nameAttribute = Attribute("pool.name", name)
+
+      def idleInc: F[Unit] =
+        idle.inc(nameAttribute)
+
+      def idleDec: F[Unit] =
+        idle.dec(nameAttribute)
+
+      def inUseCount: Resource[F, Unit] =
+        Resource.make(inUse.inc(nameAttribute))(_ => inUse.dec(nameAttribute))
+
+      def inUseRecordDuration: Resource[F, Unit] =
+        inUseDuration.recordDuration(TimeUnit.MILLISECONDS, nameAttribute)
+
+      def acquiredTotalInc: F[Unit] =
+        acquiredTotal.inc(nameAttribute)
+
+      def acquireRecordDuration: Resource[F, Unit] =
+        acquireDuration.recordDuration(TimeUnit.MILLISECONDS, nameAttribute)
     }
-  }
 
 }

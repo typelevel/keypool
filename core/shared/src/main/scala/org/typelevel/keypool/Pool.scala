@@ -73,6 +73,7 @@ object Pool {
 
   final class Builder[F[_]: Temporal, B] private (
       val kpRes: Resource[F, B],
+      val name: String,
       val kpDefaultReuseState: Reusable,
       val idleTimeAllowedInPool: Duration,
       val kpMaxIdle: Int,
@@ -82,6 +83,7 @@ object Pool {
   ) {
     private def copy(
         kpRes: Resource[F, B] = this.kpRes,
+        name: String = this.name,
         kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
         idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
         kpMaxIdle: Int = this.kpMaxIdle,
@@ -90,6 +92,7 @@ object Pool {
         meterProvider: MeterProvider[F] = this.meterProvider
     ): Builder[F, B] = new Builder[F, B](
       kpRes,
+      name = name,
       kpDefaultReuseState,
       idleTimeAllowedInPool,
       kpMaxIdle,
@@ -124,9 +127,13 @@ object Pool {
     def withMeterProvider(meterProvider: MeterProvider[F]): Builder[F, B] =
       copy(meterProvider = meterProvider)
 
+    def withName(name: String): Builder[F, B] =
+      copy(name = name)
+
     private def toKeyPoolBuilder: KeyPool.Builder[F, Unit, B] =
       new KeyPool.Builder(
         kpRes = _ => kpRes,
+        name = name,
         kpDefaultReuseState = kpDefaultReuseState,
         idleTimeAllowedInPool = idleTimeAllowedInPool,
         kpMaxPerKey = _ => kpMaxTotal,
@@ -151,6 +158,7 @@ object Pool {
         res: Resource[F, B]
     ): Builder[F, B] = new Builder[F, B](
       res,
+      Defaults.name,
       Defaults.defaultReuseState,
       Defaults.idleTimeAllowedInPool,
       Defaults.maxIdle,
@@ -170,6 +178,7 @@ object Pool {
       val idleTimeAllowedInPool = 30.seconds
       val maxIdle = 100
       val maxTotal = 100
+      val name = "unknown"
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)
       }

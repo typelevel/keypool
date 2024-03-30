@@ -23,18 +23,12 @@ package org.typelevel.keypool
 
 import cats.effect._
 import cats.effect.testkit._
-import io.opentelemetry.sdk.metrics.{
-  Aggregation,
-  InstrumentSelector,
-  InstrumentType,
-  SdkMeterProviderBuilder,
-  View
-}
+import io.opentelemetry.sdk.metrics.{Aggregation, InstrumentSelector, InstrumentType, SdkMeterProviderBuilder, View}
 import munit.CatsEffectSuite
-import org.typelevel.otel4s.Otel4s
-import org.typelevel.otel4s.java.OtelJava
 import org.typelevel.otel4s.metrics.MeterProvider
-import org.typelevel.otel4s.testkit.metrics.{HistogramPointData, MetricData, MetricsSdk}
+import org.typelevel.otel4s.oteljava.testkit.metrics.MetricsTestkit
+import org.typelevel.otel4s.oteljava.testkit.metrics.data.{HistogramPointData, Metric, MetricData}
+
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 import scala.util.control.NoStackTrace
@@ -46,10 +40,11 @@ class PoolMetricsSpec extends CatsEffectSuite {
     val expectedSnapshot =
       MetricsSnapshot(Nil, Nil, Nil, Nil, Nil)
 
-    for {
-      sdk <- createSdk
-      snapshot <- mkPool(sdk.otel.meterProvider).use(_ => sdk.snapshot)
-    } yield assertEquals(snapshot, expectedSnapshot)
+    createTestkit.use { testkit =>
+      for {
+        snapshot <- mkPool(testkit.metrics.meterProvider).use(_ => testkit.snapshot)
+      } yield assertEquals(snapshot, expectedSnapshot)
+    }
   }
 
   test("In use: increment on acquire and decrement on release") {
@@ -124,13 +119,13 @@ class PoolMetricsSpec extends CatsEffectSuite {
 
   test("Generate valid metric snapshots") {
     TestControl.executeEmbed {
-      createSdk.flatMap { sdk =>
-        mkPool(sdk.otel.meterProvider)
+      createTestkit.use { sdk =>
+        mkPool(sdk.metrics.meterProvider)
           .use(pool => pool.take.use(_ => sdk.snapshot.delayBy(500.millis)).product(sdk.snapshot))
           .map { case (inUse, afterUse) =>
             val acquireDuration =
               List(
-                new HistogramPointData(0, 1, HistogramBuckets, List(1, 0, 0, 0, 0))
+                HistogramPointData(0, 1, HistogramBuckets, List(1, 0, 0, 0, 0))
               )
 
             val expectedInUse = MetricsSnapshot(
@@ -145,7 +140,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
               idle = List(1),
               inUse = List(0),
               inUseDuration = List(
-                new HistogramPointData(500.0, 1, HistogramBuckets, List(0, 0, 0, 1, 0))
+                HistogramPointData(500.0, 1, HistogramBuckets, List(0, 0, 0, 1, 0))
               ),
               acquiredTotal = List(1),
               acquireDuration = acquireDuration
@@ -160,10 +155,10 @@ class PoolMetricsSpec extends CatsEffectSuite {
 
   private def poolTest(
       customize: Pool.Builder[IO, Ref[IO, Int]] => Pool.Builder[IO, Ref[IO, Int]] = identity
-  )(scenario: (OtelSdk[IO], Pool[IO, Ref[IO, Int]]) => IO[Unit]): IO[Unit] = {
-    createSdk.flatMap { sdk =>
+  )(scenario: (OtelTestkit[IO], Pool[IO, Ref[IO, Int]]) => IO[Unit]): IO[Unit] = {
+    createTestkit.use { sdk =>
       val builder =
-        Pool.Builder(Ref.of[IO, Int](1), nothing).withMeterProvider(sdk.otel.meterProvider)
+        Pool.Builder(Ref.of[IO, Int](1), nothing).withMeterProvider(sdk.metrics.meterProvider)
 
       customize(builder).build.use(pool => scenario(sdk, pool))
     }
@@ -179,7 +174,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
       .withMaxTotal(10)
       .build
 
-  private def createSdk: IO[OtelSdk[IO]] = {
+  private def createTestkit: Resource[IO, OtelTestkit[IO]] = {
     def customize(builder: SdkMeterProviderBuilder) =
       builder
         .registerView(
@@ -192,15 +187,13 @@ class PoolMetricsSpec extends CatsEffectSuite {
             .build()
         )
 
-    val sdk = MetricsSdk.create[IO](customize)
-
-    OtelJava.forSync[IO](sdk.sdk).map { otel4s =>
-      new OtelSdk[IO] {
-        val otel: Otel4s[IO] = otel4s
+    MetricsTestkit.inMemory[IO](customize).map { testkit =>
+      new OtelTestkit[IO] {
+        val metrics: MetricsTestkit[IO] = testkit
 
         def snapshot: IO[MetricsSnapshot] =
           for {
-            metrics <- sdk.metrics
+            metrics <- testkit.collectMetrics[Metric]
           } yield {
             def counterValue(name: String): List[Long] =
               metrics
@@ -221,11 +214,11 @@ class PoolMetricsSpec extends CatsEffectSuite {
                 .getOrElse(Nil)
 
             MetricsSnapshot(
-              counterValue("idle"),
-              counterValue("in_use"),
-              histogramSnapshot("in_use_duration"),
-              counterValue("acquired_total"),
-              histogramSnapshot("acquire_duration")
+              counterValue("idle.current"),
+              counterValue("in_use.current"),
+              histogramSnapshot("in_use.duration"),
+              counterValue("acquired.total"),
+              histogramSnapshot("acquire.duration")
             )
           }
       }
@@ -242,8 +235,8 @@ class PoolMetricsSpec extends CatsEffectSuite {
 
 object PoolMetricsSpec {
 
-  trait OtelSdk[F[_]] {
-    def otel: Otel4s[F]
+  trait OtelTestkit[F[_]] {
+    def metrics: MetricsTestkit[F]
     def snapshot: F[MetricsSnapshot]
   }
 

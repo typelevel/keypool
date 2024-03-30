@@ -26,7 +26,6 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   )
   .jvmSettings(
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "otel4s-oteljava"         % otel4sV % Test,
       "org.typelevel" %% "otel4s-oteljava-testkit" % otel4sV % Test
     )
   )
