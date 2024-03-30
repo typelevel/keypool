@@ -1,10 +1,10 @@
 import com.typesafe.tools.mima.core._
 
-val Scala213 = "2.13.10"
-val Scala3 = "3.2.2"
+val Scala213 = "2.13.13"
+val Scala3 = "3.3.3"
 
 ThisBuild / tlBaseVersion := "0.4"
-ThisBuild / crossScalaVersions := Seq("2.12.17", Scala213, Scala3)
+ThisBuild / crossScalaVersions := Seq("2.12.19", Scala213, Scala3)
 ThisBuild / tlVersionIntroduced := Map("3" -> "0.4.3")
 ThisBuild / developers += tlGitHubDev("ChristopherDavenport", "Christopher Davenport")
 ThisBuild / startYear := Some(2019)
@@ -26,8 +26,8 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   )
   .jvmSettings(
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "otel4s-java"    % otel4sV % Test,
-      "org.typelevel" %% "otel4s-testkit" % otel4sV % Test
+      "org.typelevel" %% "otel4s-oteljava"         % otel4sV % Test,
+      "org.typelevel" %% "otel4s-oteljava-testkit" % otel4sV % Test
     )
   )
   .nativeSettings(
@@ -59,15 +59,15 @@ lazy val docs = project
   .dependsOn(core.jvm)
   .enablePlugins(TypelevelSitePlugin)
 
-val catsV = "2.9.0"
-val catsEffectV = "3.4.6"
+val catsV = "2.10.0"
+val catsEffectV = "3.5.4"
 
-val otel4sV = "0.1.0"
+val otel4sV = "0.5.0"
 
-val munitV = "1.0.0-M7"
-val munitCatsEffectV = "2.0.0-M3"
+val munitV = "1.0.0-M11"
+val munitCatsEffectV = "2.0.0-M4"
 
-val kindProjectorV = "0.13.2"
+val kindProjectorV = "0.13.3"
 val betterMonadicForV = "0.3.1"
 
 // General Settings

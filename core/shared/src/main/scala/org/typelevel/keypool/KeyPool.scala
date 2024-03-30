@@ -312,7 +312,9 @@ object KeyPool {
       _ <- kp.kpMaxTotalSem.permit
       optR <- Resource.eval(kp.kpVar.modify(go))
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
-      resource <- Resource.make(optR.fold(allocateNew)(r => Applicative[F].pure(r))) { resource =>
+      resource <- Resource.makeFull[F, (B, F[Unit])] { poll =>
+        optR.fold(poll(allocateNew))(r => Applicative[F].pure(r))
+      } { resource =>
         for {
           reusable <- releasedState.get
           out <- reusable match {
