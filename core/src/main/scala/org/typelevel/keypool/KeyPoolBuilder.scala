@@ -27,12 +27,10 @@ import cats.syntax.all._
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.spawn._
 import cats.effect.std.Semaphore
-import org.typelevel.otel4s.metrics.MeterProvider
 import scala.concurrent.duration._
 
 @deprecated("use KeyPool.Builder", "0.4.7")
 final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
-    val name: String,
     val kpCreate: A => F[B],
     val kpDestroy: B => F[Unit],
     val kpDefaultReuseState: Reusable,
@@ -43,7 +41,6 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
     val onReaperException: Throwable => F[Unit]
 ) {
   private def copy(
-      name: String = this.name,
       kpCreate: A => F[B] = this.kpCreate,
       kpDestroy: B => F[Unit] = this.kpDestroy,
       kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
@@ -53,7 +50,6 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpMaxTotal: Int = this.kpMaxTotal,
       onReaperException: Throwable => F[Unit] = this.onReaperException
   ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
-    name,
     kpCreate,
     kpDestroy,
     kpDefaultReuseState,
@@ -96,7 +92,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
         Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
       )(kpVar => KeyPool.destroy(kpVar))
       kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
-      kpMetrics <- Resource.eval(Metrics.fromMeterProvider(MeterProvider.noop, name))
+      kpMetrics <- Resource.pure(Metrics.noop)
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
@@ -124,7 +120,6 @@ object KeyPoolBuilder {
       create: A => F[B],
       destroy: B => F[Unit]
   ): KeyPoolBuilder[F, A, B] = new KeyPoolBuilder[F, A, B](
-    Defaults.name,
     create,
     destroy,
     Defaults.defaultReuseState,
@@ -141,7 +136,6 @@ object KeyPoolBuilder {
     def maxPerKey[K](k: K): Int = Function.const(100)(k)
     val maxIdle = 100
     val maxTotal = 100
-    val name = "unknown"
     def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
       Function.const(Applicative[F].unit)(t)
     }

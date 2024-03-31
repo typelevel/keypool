@@ -28,7 +28,6 @@ import cats.effect.std.Semaphore
 import cats.syntax.all._
 import scala.concurrent.duration._
 import org.typelevel.keypool.internal._
-import org.typelevel.otel4s.metrics.MeterProvider
 
 /**
  * This pools internal guarantees are that the max number of values are in the pool at any time, not
@@ -328,14 +327,13 @@ object KeyPool {
 
   final class Builder[F[_]: Temporal, A, B] private[keypool] (
       val kpRes: A => Resource[F, B],
-      val name: String,
       val kpDefaultReuseState: Reusable,
       val idleTimeAllowedInPool: Duration,
       val kpMaxPerKey: A => Int,
       val kpMaxIdle: Int,
       val kpMaxTotal: Int,
       val onReaperException: Throwable => F[Unit],
-      val meterProvider: MeterProvider[F]
+      val metricsProvider: Metrics.Provider[F]
   ) {
     private def copy(
         kpRes: A => Resource[F, B] = this.kpRes,
@@ -345,18 +343,16 @@ object KeyPool {
         kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
         onReaperException: Throwable => F[Unit] = this.onReaperException,
-        meterProvider: MeterProvider[F] = this.meterProvider,
-        name: String = this.name
+        metricsProvider: Metrics.Provider[F] = this.metricsProvider
     ): Builder[F, A, B] = new Builder[F, A, B](
       kpRes,
-      name,
       kpDefaultReuseState,
       idleTimeAllowedInPool,
       kpMaxPerKey,
       kpMaxIdle,
       kpMaxTotal,
       onReaperException,
-      meterProvider
+      metricsProvider
     )
 
     def doOnCreate(f: B => F[Unit]): Builder[F, A, B] =
@@ -385,11 +381,8 @@ object KeyPool {
     def withOnReaperException(f: Throwable => F[Unit]): Builder[F, A, B] =
       copy(onReaperException = f)
 
-    def withMeterProvider(meterProvider: MeterProvider[F]): Builder[F, A, B] =
-      copy(meterProvider = meterProvider)
-
-    def withName(name: String): Builder[F, A, B] =
-      copy(name = name)
+    def withMetricsProvider(metricsProvider: Metrics.Provider[F]): Builder[F, A, B] =
+      copy(metricsProvider = metricsProvider)
 
     def build: Resource[F, KeyPool[F, A, B]] = {
       def keepRunning[Z](fa: F[Z]): F[Z] =
@@ -399,7 +392,7 @@ object KeyPool {
           Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
         )(kpVar => KeyPool.destroy(kpVar))
         kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
-        kpMetrics <- Resource.eval(Metrics.fromMeterProvider(meterProvider, name))
+        kpMetrics <- Resource.eval(metricsProvider.get)
         _ <- idleTimeAllowedInPool match {
           case fd: FiniteDuration =>
             val nanos = 0.seconds.max(fd)
@@ -426,14 +419,13 @@ object KeyPool {
         res: A => Resource[F, B]
     ): Builder[F, A, B] = new Builder[F, A, B](
       res,
-      Defaults.name,
       Defaults.defaultReuseState,
       Defaults.idleTimeAllowedInPool,
       Defaults.maxPerKey,
       Defaults.maxIdle,
       Defaults.maxTotal,
       Defaults.onReaperException[F],
-      Defaults.meterProvider
+      Defaults.metricsProvider
     )
 
     def apply[F[_]: Temporal, A, B](
@@ -448,11 +440,10 @@ object KeyPool {
       def maxPerKey[K](k: K): Int = Function.const(100)(k)
       val maxIdle = 100
       val maxTotal = 100
-      val name = "unknown"
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)
       }
-      def meterProvider[F[_]: Applicative]: MeterProvider[F] = MeterProvider.noop
+      def metricsProvider[F[_]: Applicative]: Metrics.Provider[F] = Metrics.Provider.noop
     }
   }
 }

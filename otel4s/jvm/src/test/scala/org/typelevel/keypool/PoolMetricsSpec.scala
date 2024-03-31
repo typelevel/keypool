@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Typelevel
+ * Copyright (c) 2024 Typelevel
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -23,7 +23,7 @@ package org.typelevel.keypool
 
 import cats.effect._
 import cats.effect.testkit._
-import io.opentelemetry.sdk.metrics.{Aggregation, InstrumentSelector, InstrumentType, SdkMeterProviderBuilder, View}
+import io.opentelemetry.sdk.metrics._
 import munit.CatsEffectSuite
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.oteljava.testkit.metrics.MetricsTestkit
@@ -158,7 +158,11 @@ class PoolMetricsSpec extends CatsEffectSuite {
   )(scenario: (OtelTestkit[IO], Pool[IO, Ref[IO, Int]]) => IO[Unit]): IO[Unit] = {
     createTestkit.use { sdk =>
       val builder =
-        Pool.Builder(Ref.of[IO, Int](1), nothing).withMeterProvider(sdk.metrics.meterProvider)
+        Pool
+          .Builder(Ref.of[IO, Int](1), nothing)
+          .withMetricsProvider(
+            Otel4sMetrics.provider(sdk.metrics.meterProvider, "test")
+          )
 
       customize(builder).build.use(pool => scenario(sdk, pool))
     }
@@ -170,7 +174,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
         Ref.of[IO, Int](1),
         nothing
       )
-      .withMeterProvider(meterProvider)
+      .withMetricsProvider(Otel4sMetrics.provider(meterProvider, "test"))
       .withMaxTotal(10)
       .build
 

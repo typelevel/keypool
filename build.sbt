@@ -11,10 +11,10 @@ ThisBuild / startYear := Some(2019)
 ThisBuild / licenses := Seq(License.MIT)
 ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/keypool_2.12"))
 
-lazy val root = tlCrossRootProject.aggregate(core)
+lazy val root = tlCrossRootProject.aggregate(core, otel4s)
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
-  .crossType(CrossType.Full)
+  .crossType(CrossType.Pure)
   .in(file("core"))
   .settings(commonSettings)
   .settings(
@@ -23,11 +23,6 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   )
   .jsSettings(
     tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.6").toMap
-  )
-  .jvmSettings(
-    libraryDependencies ++= Seq(
-      "org.typelevel" %% "otel4s-oteljava-testkit" % otel4sV % Test
-    )
   )
   .nativeSettings(
     tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.8").toMap
@@ -52,10 +47,25 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     )
   )
 
+lazy val otel4s = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Full)
+  .in(file("otel4s"))
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(
+    name := "keypool-otel4s",
+    startYear := Some(2024),
+    crossScalaVersions := Seq(Scala213, Scala3),
+    libraryDependencies += "org.typelevel" %%% "otel4s-core" % otel4sV
+  )
+  .jvmSettings(
+    libraryDependencies += "org.typelevel" %% "otel4s-oteljava-testkit" % otel4sV % Test
+  )
+
 lazy val docs = project
   .in(file("site"))
   .settings(commonSettings)
-  .dependsOn(core.jvm)
+  .dependsOn(core.jvm, otel4s.jvm)
   .enablePlugins(TypelevelSitePlugin)
 
 val catsV = "2.10.0"
@@ -75,7 +85,6 @@ lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
     "org.typelevel" %%% "cats-core"           % catsV,
     "org.typelevel" %%% "cats-effect-std"     % catsEffectV,
-    "org.typelevel" %%% "otel4s-core"         % otel4sV,
     "org.typelevel" %%% "cats-effect-testkit" % catsEffectV      % Test,
     "org.scalameta" %%% "munit"               % munitV           % Test,
     "org.typelevel" %%% "munit-cats-effect"   % munitCatsEffectV % Test
