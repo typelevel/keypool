@@ -31,7 +31,6 @@ import org.typelevel.otel4s.oteljava.testkit.metrics.MetricsTestkit
 import org.typelevel.otel4s.oteljava.testkit.metrics.data.{HistogramPointData, Metric, MetricData}
 
 import scala.concurrent.duration._
-import scala.jdk.CollectionConverters._
 import scala.util.control.NoStackTrace
 
 class PoolMetricsSpec extends CatsEffectSuite {
