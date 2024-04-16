@@ -13,6 +13,17 @@ ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/k
 
 lazy val root = tlCrossRootProject.aggregate(core, otel4s)
 
+ThisBuild / githubWorkflowBuildMatrixAdditions := {
+  val projects = core.componentProjects ++ otel4s.componentProjects
+
+  Map("project" -> projects.map(_.id).toList)
+}
+
+ThisBuild / githubWorkflowBuildMatrixExclusions ++= {
+  val projects = otel4s.componentProjects.map(_.id)
+  projects.map(project => MatrixExclude(Map("project" -> project, "scala" -> "2.12"))).toSeq
+}
+
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("core"))
