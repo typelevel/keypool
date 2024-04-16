@@ -21,7 +21,7 @@ ThisBuild / githubWorkflowBuildMatrixAdditions := {
 
 ThisBuild / githubWorkflowBuildMatrixExclusions ++= {
   val projects = otel4s.componentProjects.map(_.id)
-  projects.map(project => MatrixExclude(Map("project" -> project, "scala" -> "2.12"))).toSeq
+  projects.map(project => MatrixExclude(Map("project" -> project, "scala" -> "2.12")))
 }
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
@@ -67,7 +67,8 @@ lazy val otel4s = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     name := "keypool-otel4s",
     startYear := Some(2024),
     crossScalaVersions := Seq(Scala213, Scala3),
-    libraryDependencies += "org.typelevel" %%% "otel4s-core" % otel4sV
+    libraryDependencies += "org.typelevel" %%% "otel4s-core" % otel4sV,
+    mimaPreviousArtifacts ~= { _.filterNot(_.revision.startsWith("0.4")) }
   )
   .jvmSettings(
     libraryDependencies += "org.typelevel" %% "otel4s-oteljava-testkit" % otel4sV % Test
@@ -82,7 +83,7 @@ lazy val docs = project
 val catsV = "2.10.0"
 val catsEffectV = "3.5.4"
 
-val otel4sV = "0.5.0"
+val otel4sV = "0.6.0"
 
 val munitV = "1.0.0-M11"
 val munitCatsEffectV = "2.0.0-M4"
