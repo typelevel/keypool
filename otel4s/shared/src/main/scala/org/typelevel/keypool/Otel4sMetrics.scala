@@ -28,69 +28,96 @@ import cats.effect.kernel.Resource
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import org.typelevel.keypool.internal.Metrics
-import org.typelevel.otel4s.Attribute
-import org.typelevel.otel4s.metrics.MeterProvider
+import org.typelevel.otel4s.Attributes
+import org.typelevel.otel4s.metrics.{BucketBoundaries, Meter}
 
 object Otel4sMetrics {
 
-  def provider[F[_]: Monad](
-      meterProvider: MeterProvider[F],
-      poolName: String
+  private val DefaultHistogramBuckets: BucketBoundaries =
+    BucketBoundaries(Vector(.005, .01, .025, .05, .075, .1, .25, .5, .75, 1, 2.5, 5, 7.5, 10))
+
+  /**
+   * Creates metrics provider using otel4s `Meter` under the hood.
+   *
+   * Use `attributes` to customize the metrics.
+   *
+   * @example
+   *   {{{
+   * val attributes = Attributes(Attribute("pool.name", "db-pool"))
+   *
+   * Otel4sMetrics.provider[IO](attributes = attributes)
+   *   }}}
+   *
+   * @param prefix
+   *   the prefix to prepend to the metrics
+   *
+   * @param attributes
+   *   the attributes to attach to the measurements
+   *
+   * @param inUseDurationSecondsHistogramBuckets
+   *   the histogram buckets for the 'in_use.duration' histogram
+   *
+   * @param acquireDurationSecondsHistogramBuckets
+   *   the histogram buckets for 'acquire.duration' histogram
+   */
+  def provider[F[_]: Monad: Meter](
+      prefix: String = "keypool",
+      attributes: Attributes = Attributes.empty,
+      inUseDurationSecondsHistogramBuckets: BucketBoundaries = DefaultHistogramBuckets,
+      acquireDurationSecondsHistogramBuckets: BucketBoundaries = DefaultHistogramBuckets
   ): Metrics.Provider[F] =
     new Metrics.Provider[F] {
       def get: F[Metrics[F]] =
         for {
-          meter <- meterProvider.get("org.typelevel.keypool")
-
-          idle <- meter
-            .upDownCounter[Long]("idle.current")
+          idle <- Meter[F]
+            .upDownCounter[Long](s"$prefix.idle.current")
             .withUnit("{resource}")
-            .withDescription("A current number of idle resources")
+            .withDescription("A current number of idle resources.")
             .create
 
-          inUse <- meter
-            .upDownCounter[Long]("in_use.current")
+          inUse <- Meter[F]
+            .upDownCounter[Long](s"$prefix.in_use.current")
             .withUnit("{resource}")
-            .withDescription("A current number of resources in use")
+            .withDescription("A current number of resources in use.")
             .create
 
-          inUseDuration <- meter
-            .histogram[Long]("in_use.duration")
-            .withUnit("ms")
-            .withDescription("For how long a resource is in use")
+          inUseDuration <- Meter[F]
+            .histogram[Long](s"$prefix.in_use.duration")
+            .withUnit("s")
+            .withDescription("For how long a resource is in use.")
+            .withExplicitBucketBoundaries(inUseDurationSecondsHistogramBuckets)
             .create
 
-          acquiredTotal <- meter
-            .counter[Long]("acquired.total")
+          acquiredTotal <- Meter[F]
+            .counter[Long](s"$prefix.acquired.total")
             .withUnit("{resource}")
-            .withDescription("A total number of acquired resources")
+            .withDescription("A total number of acquired resources.")
             .create
 
-          acquireDuration <- meter
-            .histogram[Long]("acquire.duration")
-            .withUnit("ms")
-            .withDescription("How long does it take to acquire a resource")
+          acquireDuration <- Meter[F]
+            .histogram[Long](s"$prefix.acquire.duration")
+            .withUnit("s")
+            .withDescription("How long does it take to acquire a resource.")
+            .withExplicitBucketBoundaries(acquireDurationSecondsHistogramBuckets)
             .create
         } yield new Metrics[F] {
-          private val nameAttribute = Attribute("pool.name", poolName)
-
           def idleInc: F[Unit] =
-            idle.inc(nameAttribute)
+            idle.inc(attributes)
 
           def idleDec: F[Unit] =
-            idle.dec(nameAttribute)
+            idle.dec(attributes)
 
           def inUseCount: Resource[F, Unit] =
-            Resource.make(inUse.inc(nameAttribute))(_ => inUse.dec(nameAttribute))
+            Resource.make(inUse.inc(attributes))(_ => inUse.dec(attributes))
 
           def inUseRecordDuration: Resource[F, Unit] =
-            inUseDuration.recordDuration(TimeUnit.MILLISECONDS, nameAttribute)
+            inUseDuration.recordDuration(TimeUnit.SECONDS, attributes)
 
           def acquiredTotalInc: F[Unit] =
-            acquiredTotal.inc(nameAttribute)
+            acquiredTotal.inc(attributes)
 
           def acquireRecordDuration: Resource[F, Unit] =
-            acquireDuration.recordDuration(TimeUnit.MILLISECONDS, nameAttribute)
+            acquireDuration.recordDuration(TimeUnit.SECONDS, attributes)
         }
     }
 }

@@ -302,7 +302,7 @@ object KeyPool {
       }
 
     def allocateNew: F[(B, F[Unit])] =
-      kp.kpMetrics.acquireRecordDuration.use(_ => kp.kpRes(k).allocated)
+      kp.kpMetrics.acquireRecordDuration.surround(kp.kpRes(k).allocated)
 
     for {
       _ <- kp.kpMaxTotalSem.permit
