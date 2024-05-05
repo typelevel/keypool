@@ -60,7 +60,7 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   )
 
 lazy val otel4s = crossProject(JVMPlatform, JSPlatform, NativePlatform)
-  .crossType(CrossType.Full)
+  .crossType(CrossType.Pure)
   .in(file("otel4s"))
   .dependsOn(core)
   .settings(commonSettings)
@@ -68,11 +68,11 @@ lazy val otel4s = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     name := "keypool-otel4s",
     startYear := Some(2024),
     crossScalaVersions := Seq(Scala213, Scala3),
-    libraryDependencies += "org.typelevel" %%% "otel4s-core" % otel4sV,
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "otel4s-core-metrics"        % otel4sV,
+      "org.typelevel" %%% "otel4s-sdk-metrics-testkit" % otel4sV % Test
+    ),
     mimaPreviousArtifacts ~= { _.filterNot(_.revision.startsWith("0.4")) }
-  )
-  .jvmSettings(
-    libraryDependencies += "org.typelevel" %% "otel4s-oteljava-testkit" % otel4sV % Test
   )
 
 lazy val docs = project
@@ -84,10 +84,10 @@ lazy val docs = project
 val catsV = "2.10.0"
 val catsEffectV = "3.5.4"
 
-val otel4sV = "0.6.0"
+val otel4sV = "0.7.0"
 
-val munitV = "1.0.0-M11"
-val munitCatsEffectV = "2.0.0-M4"
+val munitV = "1.0.0-RC1"
+val munitCatsEffectV = "2.0.0-M5"
 
 val kindProjectorV = "0.13.3"
 val betterMonadicForV = "0.3.1"

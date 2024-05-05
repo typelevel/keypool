@@ -27,8 +27,8 @@ import munit.CatsEffectSuite
 import org.typelevel.keypool.internal.Metrics
 import org.typelevel.otel4s.{Attribute, Attributes}
 import org.typelevel.otel4s.metrics.{BucketBoundaries, Meter, MeterProvider}
-import org.typelevel.otel4s.oteljava.testkit.metrics.MetricsTestkit
-import org.typelevel.otel4s.oteljava.testkit.metrics.data.{HistogramPointData, Metric, MetricData}
+import org.typelevel.otel4s.sdk.metrics.data.{MetricPoints, PointData, TimeWindow}
+import org.typelevel.otel4s.sdk.testkit.metrics.MetricsTestkit
 
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
@@ -38,7 +38,7 @@ class PoolMetricsSpec extends CatsEffectSuite {
 
   test("Metrics should be empty for unused pool") {
     val expectedSnapshot =
-      MetricsSnapshot(Nil, Nil, Nil, Nil, Nil)
+      MetricsSnapshot(Vector.empty, Vector.empty, Vector.empty, Vector.empty, Vector.empty)
 
     createTestkit.use { testkit =>
       for {
@@ -53,8 +53,8 @@ class PoolMetricsSpec extends CatsEffectSuite {
         inUse <- pool.take.surround(sdk.snapshot)
         afterUse <- sdk.snapshot
       } yield {
-        assertEquals(inUse.inUse, List(1L))
-        assertEquals(afterUse.inUse, List(0L))
+        assertEquals(inUse.inUse, Vector(1L))
+        assertEquals(afterUse.inUse, Vector(0L))
       }
     }
   }
@@ -71,8 +71,8 @@ class PoolMetricsSpec extends CatsEffectSuite {
         inUse <- deferred.get
         afterUse <- sdk.snapshot
       } yield {
-        assertEquals(inUse.inUse, List(1L))
-        assertEquals(afterUse.inUse, List(0L))
+        assertEquals(inUse.inUse, Vector(1L))
+        assertEquals(afterUse.inUse, Vector(0L))
       }
     }
   }
@@ -83,8 +83,8 @@ class PoolMetricsSpec extends CatsEffectSuite {
         inUse <- pool.take.surround(sdk.snapshot)
         afterUse <- sdk.snapshot
       } yield {
-        assertEquals(inUse.idle, Nil)
-        assertEquals(afterUse.idle, Nil)
+        assertEquals(inUse.idle, Vector.empty)
+        assertEquals(afterUse.idle, Vector.empty)
       }
     }
   }
@@ -95,77 +95,89 @@ class PoolMetricsSpec extends CatsEffectSuite {
         inUse <- pool.take.surround(sdk.snapshot)
         afterUse <- sdk.snapshot
       } yield {
-        assertEquals(inUse.idle, Nil)
-        assertEquals(afterUse.idle, List(1L))
+        assertEquals(inUse.idle, Vector.empty)
+        assertEquals(afterUse.idle, Vector(1L))
       }
     }
   }
 
   test("Idle: decrement on reaper cleanup") {
-    TestControl.executeEmbed {
-      poolTest(_.withMaxIdle(1).withIdleTimeAllowedInPool(1.second)) { (sdk, pool) =>
-        for {
-          inUse <- pool.take.surround(sdk.snapshot)
-          afterUse <- sdk.snapshot
-          afterSleep <- sdk.snapshot.delayBy(6.seconds)
-        } yield {
-          assertEquals(inUse.idle, Nil)
-          assertEquals(afterUse.idle, List(1L))
-          assertEquals(afterSleep.idle, List(0L))
-        }
+    poolTest(_.withMaxIdle(1).withIdleTimeAllowedInPool(1.second)) { (sdk, pool) =>
+      for {
+        inUse <- pool.take.surround(sdk.snapshot)
+        afterUse <- sdk.snapshot
+        afterSleep <- sdk.snapshot.delayBy(6.seconds)
+      } yield {
+        assertEquals(inUse.idle, Vector.empty)
+        assertEquals(afterUse.idle, Vector(1L))
+        assertEquals(afterSleep.idle, Vector(0L))
       }
     }
+
   }
 
   test("Generate valid metric snapshots") {
-    TestControl.executeEmbed {
-      createTestkit.use { sdk =>
-        mkPool(sdk.metrics.meterProvider)
-          .use(pool => pool.take.surround(sdk.snapshot.delayBy(1.second)).product(sdk.snapshot))
-          .map { case (inUse, afterUse) =>
-            val acquireDuration =
-              List(
-                HistogramPointData(0, 1, HistogramBuckets, List(1, 0, 0, 0, 0))
+    poolTest() { (sdk, pool) =>
+      pool.take
+        .surround(sdk.snapshot.delayBy(1.second))
+        .product(sdk.snapshot)
+        .map { case (inUse, afterUse) =>
+          val acquireDuration = Vector(
+            PointData.histogram(
+              TimeWindow(Duration.Zero, 1.second),
+              Attributes(Attribute("pool.name", "test")),
+              Vector.empty,
+              Some(PointData.Histogram.Stats(0.0, 0.0, 0.0, 1)),
+              HistogramBuckets,
+              Vector(1, 0, 0, 0, 0)
+            )
+          )
+
+          val expectedInUse = MetricsSnapshot(
+            idle = Vector.empty,
+            inUse = Vector(1L),
+            inUseDuration = Vector.empty,
+            acquiredTotal = Vector(1L),
+            acquireDuration = acquireDuration
+          )
+
+          val expectedAfterUser = MetricsSnapshot(
+            idle = Vector(1L),
+            inUse = Vector(0L),
+            inUseDuration = Vector(
+              PointData.histogram(
+                TimeWindow(Duration.Zero, 1.second),
+                Attributes(Attribute("pool.name", "test")),
+                Vector.empty,
+                Some(PointData.Histogram.Stats(1.0, 1.0, 1.0, 1)),
+                HistogramBuckets,
+                Vector(0, 1, 0, 0, 0)
               )
+            ),
+            acquiredTotal = Vector(1L),
+            acquireDuration = acquireDuration
+          )
 
-            val expectedInUse = MetricsSnapshot(
-              idle = Nil,
-              inUse = List(1),
-              inUseDuration = Nil,
-              acquiredTotal = List(1),
-              acquireDuration = acquireDuration
-            )
-
-            val expectedAfterUser = MetricsSnapshot(
-              idle = List(1),
-              inUse = List(0),
-              inUseDuration = List(
-                HistogramPointData(1.0, 1, HistogramBuckets, List(0, 1, 0, 0, 0))
-              ),
-              acquiredTotal = List(1),
-              acquireDuration = acquireDuration
-            )
-
-            assertEquals(inUse, expectedInUse)
-            assertEquals(afterUse, expectedAfterUser)
-          }
-      }
+          assertEquals(inUse, expectedInUse)
+          assertEquals(afterUse, expectedAfterUser)
+        }
     }
   }
 
   private def poolTest(
       customize: Pool.Builder[IO, Ref[IO, Int]] => Pool.Builder[IO, Ref[IO, Int]] = identity
-  )(scenario: (OtelTestkit[IO], Pool[IO, Ref[IO, Int]]) => IO[Unit]): IO[Unit] = {
-    createTestkit.use { sdk =>
-      sdk.metrics.meterProvider.get("org.typelevel.keypool").flatMap { implicit M: Meter[IO] =>
-        val builder = Pool
-          .Builder(Ref.of[IO, Int](1), nothing)
-          .withMetricsProvider(metricsProvider)
+  )(scenario: (OtelTestkit[IO], Pool[IO, Ref[IO, Int]]) => IO[Unit]): IO[Unit] =
+    TestControl.executeEmbed {
+      createTestkit.use { sdk =>
+        sdk.metrics.meterProvider.get("org.typelevel.keypool").flatMap { implicit M: Meter[IO] =>
+          val builder = Pool
+            .Builder(Ref.of[IO, Int](1), nothing)
+            .withMetricsProvider(metricsProvider)
 
-        customize(builder).build.use(pool => scenario(sdk, pool))
+          customize(builder).build.use(pool => scenario(sdk, pool))
+        }
       }
     }
-  }
 
   private def mkPool(meterProvider: MeterProvider[IO]) =
     Resource.eval(meterProvider.get("org.typelevel.keypool")).flatMap { implicit M: Meter[IO] =>
@@ -183,8 +195,8 @@ class PoolMetricsSpec extends CatsEffectSuite {
     Otel4sMetrics.provider[IO](
       "keypool",
       Attributes(Attribute("pool.name", "test")),
-      BucketBoundaries(HistogramBuckets.toVector),
-      BucketBoundaries(HistogramBuckets.toVector)
+      HistogramBuckets,
+      HistogramBuckets
     )
 
   private def createTestkit: Resource[IO, OtelTestkit[IO]] =
@@ -194,25 +206,27 @@ class PoolMetricsSpec extends CatsEffectSuite {
 
         def snapshot: IO[MetricsSnapshot] =
           for {
-            metrics <- testkit.collectMetrics[Metric]
+            metrics <- testkit.collectMetrics
           } yield {
-            def counterValue(name: String): List[Long] =
+            def counterValue(name: String): Vector[Long] =
               metrics
                 .find(_.name == name)
                 .map(_.data)
-                .collectFirst { case MetricData.LongSum(points) =>
-                  points.map(_.value)
+                .collectFirst { case sum: MetricPoints.Sum =>
+                  sum.points.toVector.collect { case long: PointData.LongNumber =>
+                    long.value
+                  }
                 }
-                .getOrElse(Nil)
+                .getOrElse(Vector.empty)
 
-            def histogramSnapshot(name: String): List[HistogramPointData] =
+            def histogramSnapshot(name: String): Vector[PointData.Histogram] =
               metrics
                 .find(_.name == name)
                 .map(_.data)
-                .collectFirst { case MetricData.Histogram(points) =>
-                  points.map(_.value)
+                .collectFirst { case histogram: MetricPoints.Histogram =>
+                  histogram.points.toVector
                 }
-                .getOrElse(Nil)
+                .getOrElse(Vector.empty)
 
             MetricsSnapshot(
               counterValue("keypool.idle.current"),
@@ -225,8 +239,8 @@ class PoolMetricsSpec extends CatsEffectSuite {
       }
     }
 
-  private val HistogramBuckets: List[Double] =
-    List(0.01, 1, 100, 1000)
+  private val HistogramBuckets: BucketBoundaries =
+    BucketBoundaries(Vector(0.01, 1.0, 100.0, 1000.0))
 
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void
@@ -241,11 +255,11 @@ object PoolMetricsSpec {
   }
 
   final case class MetricsSnapshot(
-      idle: List[Long],
-      inUse: List[Long],
-      inUseDuration: List[HistogramPointData],
-      acquiredTotal: List[Long],
-      acquireDuration: List[HistogramPointData]
+      idle: Vector[Long],
+      inUse: Vector[Long],
+      inUseDuration: Vector[PointData.Histogram],
+      acquiredTotal: Vector[Long],
+      acquireDuration: Vector[PointData.Histogram]
   )
 
 }
