@@ -21,7 +21,7 @@
 
 package org.typelevel.keypool
 
-import internal.{PoolList, PoolMap}
+import internal.{Metrics, PoolList, PoolMap}
 import cats._
 import cats.syntax.all._
 import cats.effect.kernel._
@@ -92,10 +92,11 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
         Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
       )(kpVar => KeyPool.destroy(kpVar))
       kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
+      kpMetrics <- Resource.pure(Metrics.noop)
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
-          keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)).background.void
+          keepRunning(KeyPool.reap(nanos, kpVar, kpMetrics, onReaperException)).background.void
         case _ =>
           Applicative[Resource[F, *]].unit
       }
@@ -106,7 +107,8 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpMaxIdle,
       kpMaxTotal,
       kpMaxTotalSem,
-      kpVar
+      kpVar,
+      kpMetrics
     )
   }
 

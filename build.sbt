@@ -11,7 +11,18 @@ ThisBuild / startYear := Some(2019)
 ThisBuild / licenses := Seq(License.MIT)
 ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/keypool_2.12"))
 
-lazy val root = tlCrossRootProject.aggregate(core)
+lazy val root = tlCrossRootProject.aggregate(core, otel4s)
+
+ThisBuild / githubWorkflowBuildMatrixAdditions := {
+  val projects = core.componentProjects ++ otel4s.componentProjects
+
+  Map("project" -> projects.map(_.id).toList)
+}
+
+ThisBuild / githubWorkflowBuildMatrixExclusions ++= {
+  val projects = otel4s.componentProjects.map(_.id)
+  projects.map(project => MatrixExclude(Map("project" -> project, "scala" -> "2.12")))
+}
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -43,18 +54,37 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       ProblemFilters
         .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPoolBuilder.this"),
       ProblemFilters
-        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#Builder.this")
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#Builder.this"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.Pool#Builder.this")
     )
+  )
+
+lazy val otel4s = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
+  .in(file("otel4s"))
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(
+    name := "keypool-otel4s",
+    startYear := Some(2024),
+    crossScalaVersions := Seq(Scala213, Scala3),
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "otel4s-core-metrics"        % otel4sV,
+      "org.typelevel" %%% "otel4s-sdk-metrics-testkit" % otel4sV % Test
+    ),
+    mimaPreviousArtifacts ~= { _.filterNot(_.revision.startsWith("0.4")) }
   )
 
 lazy val docs = project
   .in(file("site"))
   .settings(commonSettings)
-  .dependsOn(core.jvm)
+  .dependsOn(core.jvm, otel4s.jvm)
   .enablePlugins(TypelevelSitePlugin)
 
 val catsV = "2.10.0"
 val catsEffectV = "3.5.4"
+
+val otel4sV = "0.7.0"
 
 val munitV = "1.0.0-RC1"
 val munitCatsEffectV = "2.0.0-RC1"
