@@ -134,6 +134,54 @@ class PoolSpec extends CatsEffectSuite {
       }
   }
 
+  test("Used resource not cleaned up if idle time expired but eviction hasn't run") {
+    Pool
+      .Builder(
+        Ref.of[IO, Int](1),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
+      .withIdleTimeAllowedInPool(5.seconds)
+      .withDurationBetweenEvictionRuns(7.seconds)
+      .withMaxTotal(1)
+      .withOnReaperException((_: Throwable) => IO.unit)
+      .build
+      .use { pool =>
+        val action = pool.take
+          .use(_ => IO.unit)
+        for {
+          _ <- action
+          init <- pool.state
+          _ <- Temporal[IO].sleep(6.seconds)
+          later <- pool.state
+        } yield assert(init.total === 1 && later.total === 1)
+      }
+  }
+
+  test("Used resource not cleaned up if idle time expired but eviction is disabled") {
+    Pool
+      .Builder(
+        Ref.of[IO, Int](1),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
+      .withIdleTimeAllowedInPool(5.seconds)
+      .withDurationBetweenEvictionRuns(-1.seconds)
+      .withMaxTotal(1)
+      .withOnReaperException((_: Throwable) => IO.unit)
+      .build
+      .use { pool =>
+        val action = pool.take
+          .use(_ => IO.unit)
+        for {
+          _ <- action
+          init <- pool.state
+          _ <- Temporal[IO].sleep(6.seconds)
+          later <- pool.state
+        } yield assert(init.total === 1 && later.total === 1)
+      }
+  }
+
   test("Do not allocate more resources than the maxTotal") {
     val MaxTotal = 10
 

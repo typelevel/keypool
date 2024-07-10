@@ -151,6 +151,58 @@ class KeyPoolSpec extends CatsEffectSuite {
       }
   }
 
+  test("Used resource not cleaned up if idle time expired but eviction hasn't run") {
+    KeyPool
+      .Builder(
+        (i: Int) => Ref.of[IO, Int](i),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
+      .withIdleTimeAllowedInPool(5.seconds)
+      .withDurationBetweenEvictionRuns(7.seconds)
+      .withMaxPerKey(Function.const(1))
+      .withMaxTotal(1)
+      .withOnReaperException((_: Throwable) => IO.unit)
+      .build
+      .use { k =>
+        val action = k
+          .take(1)
+          .use(_ => IO.unit)
+        for {
+          _ <- action
+          init <- k.state.map(_._1)
+          _ <- Temporal[IO].sleep(6.seconds)
+          later <- k.state.map(_._1)
+        } yield assert(init === 1 && later === 1)
+      }
+  }
+
+  test("Used resource not cleaned up if idle time expired but eviction is disabled") {
+    KeyPool
+      .Builder(
+        (i: Int) => Ref.of[IO, Int](i),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
+      .withIdleTimeAllowedInPool(5.seconds)
+      .withDurationBetweenEvictionRuns(-1.seconds)
+      .withMaxPerKey(Function.const(1))
+      .withMaxTotal(1)
+      .withOnReaperException((_: Throwable) => IO.unit)
+      .build
+      .use { k =>
+        val action = k
+          .take(1)
+          .use(_ => IO.unit)
+        for {
+          _ <- action
+          init <- k.state.map(_._1)
+          _ <- Temporal[IO].sleep(6.seconds)
+          later <- k.state.map(_._1)
+        } yield assert(init === 1 && later === 1)
+      }
+  }
+
   test("Do not allocate more resources than the maxTotal") {
     val MaxTotal = 10
 
