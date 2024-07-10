@@ -136,6 +136,7 @@ object KeyPool {
    */
   private[keypool] def reap[F[_], A, B](
       idleTimeAllowedInPoolNanos: FiniteDuration,
+      durationBetweenEvictionRuns: FiniteDuration,
       kpVar: Ref[F, PoolMap[A, (B, F[Unit])]],
       onReaperException: Throwable => F[Unit]
   )(implicit F: Temporal[F]): F[Unit] = {
@@ -184,7 +185,7 @@ object KeyPool {
       (PoolMap.open(idleCount_, toKeep), toDestroy)
     }
 
-    val sleep = Temporal[F].sleep(5.seconds).void
+    val sleep = Temporal[F].sleep(durationBetweenEvictionRuns).void
 
     // Wait 5 Seconds
     def loop: F[Unit] = for {
@@ -317,6 +318,7 @@ object KeyPool {
       val kpRes: A => Resource[F, B],
       val kpDefaultReuseState: Reusable,
       val idleTimeAllowedInPool: Duration,
+      val durationBetweenEvictionRuns: Duration,
       val kpMaxPerKey: A => Int,
       val kpMaxIdle: Int,
       val kpMaxTotal: Int,
@@ -326,6 +328,7 @@ object KeyPool {
         kpRes: A => Resource[F, B] = this.kpRes,
         kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
         idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
+        durationBetweenEvictionRuns: Duration = this.durationBetweenEvictionRuns,
         kpMaxPerKey: A => Int = this.kpMaxPerKey,
         kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
@@ -334,6 +337,7 @@ object KeyPool {
       kpRes,
       kpDefaultReuseState,
       idleTimeAllowedInPool,
+      durationBetweenEvictionRuns,
       kpMaxPerKey,
       kpMaxIdle,
       kpMaxTotal,
@@ -353,6 +357,9 @@ object KeyPool {
 
     def withIdleTimeAllowedInPool(duration: Duration): Builder[F, A, B] =
       copy(idleTimeAllowedInPool = duration)
+
+    def withDurationBetweenEvictionRuns(duration: Duration): Builder[F, A, B] =
+      copy(durationBetweenEvictionRuns = duration)
 
     def withMaxPerKey(f: A => Int): Builder[F, A, B] =
       copy(kpMaxPerKey = f)
@@ -374,10 +381,12 @@ object KeyPool {
           Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
         )(kpVar => KeyPool.destroy(kpVar))
         kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
-        _ <- idleTimeAllowedInPool match {
-          case fd: FiniteDuration =>
-            val nanos = 0.seconds.max(fd)
-            keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)).background.void
+        _ <- (idleTimeAllowedInPool, durationBetweenEvictionRuns) match {
+          case (fdI: FiniteDuration, fdE: FiniteDuration) if fdE >= 0.seconds =>
+            val idleNanos = 0.seconds.max(fdI)
+            keepRunning(
+              KeyPool.reap(idleNanos, fdE, kpVar, onReaperException)
+            ).background.void
           case _ =>
             Applicative[Resource[F, *]].unit
         }
@@ -401,6 +410,7 @@ object KeyPool {
       res,
       Defaults.defaultReuseState,
       Defaults.idleTimeAllowedInPool,
+      Defaults.durationBetweenEvictionRuns,
       Defaults.maxPerKey,
       Defaults.maxIdle,
       Defaults.maxTotal,
@@ -416,6 +426,7 @@ object KeyPool {
     private object Defaults {
       val defaultReuseState = Reusable.Reuse
       val idleTimeAllowedInPool = 30.seconds
+      val durationBetweenEvictionRuns = 5.seconds
       def maxPerKey[K](k: K): Int = Function.const(100)(k)
       val maxIdle = 100
       val maxTotal = 100
