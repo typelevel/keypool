@@ -43,7 +43,10 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       ProblemFilters
         .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPoolBuilder.this"),
       ProblemFilters
-        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#Builder.this")
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#Builder.this"),
+      // Introduced by #561, add durationBetweenEvictionRuns
+      ProblemFilters
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.Pool#Builder.this")
     )
   )
 
