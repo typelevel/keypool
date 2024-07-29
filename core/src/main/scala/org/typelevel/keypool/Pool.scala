@@ -74,6 +74,7 @@ object Pool {
       val kpRes: Resource[F, B],
       val kpDefaultReuseState: Reusable,
       val idleTimeAllowedInPool: Duration,
+      val durationBetweenEvictionRuns: Duration,
       val kpMaxIdle: Int,
       val kpMaxTotal: Int,
       val onReaperException: Throwable => F[Unit]
@@ -82,6 +83,7 @@ object Pool {
         kpRes: Resource[F, B] = this.kpRes,
         kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
         idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
+        durationBetweenEvictionRuns: Duration = this.durationBetweenEvictionRuns,
         kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
         onReaperException: Throwable => F[Unit] = this.onReaperException
@@ -89,6 +91,7 @@ object Pool {
       kpRes,
       kpDefaultReuseState,
       idleTimeAllowedInPool,
+      durationBetweenEvictionRuns,
       kpMaxIdle,
       kpMaxTotal,
       onReaperException
@@ -108,6 +111,9 @@ object Pool {
     def withIdleTimeAllowedInPool(duration: Duration): Builder[F, B] =
       copy(idleTimeAllowedInPool = duration)
 
+    def withDurationBetweenEvictionRuns(duration: Duration): Builder[F, B] =
+      copy(durationBetweenEvictionRuns = duration)
+
     def withMaxIdle(maxIdle: Int): Builder[F, B] =
       copy(kpMaxIdle = maxIdle)
 
@@ -122,6 +128,7 @@ object Pool {
         kpRes = _ => kpRes,
         kpDefaultReuseState = kpDefaultReuseState,
         idleTimeAllowedInPool = idleTimeAllowedInPool,
+        durationBetweenEvictionRuns = durationBetweenEvictionRuns,
         kpMaxPerKey = _ => kpMaxTotal,
         kpMaxIdle = kpMaxIdle,
         kpMaxTotal = kpMaxTotal,
@@ -145,6 +152,7 @@ object Pool {
       res,
       Defaults.defaultReuseState,
       Defaults.idleTimeAllowedInPool,
+      Defaults.durationBetweenEvictionRuns,
       Defaults.maxIdle,
       Defaults.maxTotal,
       Defaults.onReaperException[F]
@@ -159,6 +167,7 @@ object Pool {
     private object Defaults {
       val defaultReuseState = Reusable.Reuse
       val idleTimeAllowedInPool = 30.seconds
+      val durationBetweenEvictionRuns = 5.seconds
       val maxIdle = 100
       val maxTotal = 100
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>

@@ -95,7 +95,10 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
-          keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)).background.void
+          val durationBetweenEvictionRuns = 5.seconds // the previous default
+          keepRunning(
+            KeyPool.reap(nanos, durationBetweenEvictionRuns, kpVar, onReaperException)
+          ).background.void
         case _ =>
           Applicative[Resource[F, *]].unit
       }
