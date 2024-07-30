@@ -24,7 +24,6 @@ package org.typelevel.keypool
 import cats._
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.spawn._
-import cats.effect.std.Semaphore
 import cats.syntax.all._
 import scala.concurrent.duration._
 import org.typelevel.keypool.internal._
@@ -67,7 +66,7 @@ object KeyPool {
       private[keypool] val kpMaxPerKey: A => Int,
       private[keypool] val kpMaxIdle: Int,
       private[keypool] val kpMaxTotal: Int,
-      private[keypool] val kpMaxTotalSem: Semaphore[F],
+      private[keypool] val kpMaxTotalSem: RequestSemaphore[F],
       private[keypool] val kpVar: Ref[F, PoolMap[A, (B, F[Unit])]]
   ) extends KeyPool[F, A, B] {
 
@@ -380,7 +379,7 @@ object KeyPool {
         kpVar <- Resource.make(
           Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
         )(kpVar => KeyPool.destroy(kpVar))
-        kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
+        kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fifo, kpMaxTotal))
         _ <- (idleTimeAllowedInPool, durationBetweenEvictionRuns) match {
           case (fdI: FiniteDuration, fdE: FiniteDuration) if fdE >= 0.seconds =>
             val idleNanos = 0.seconds.max(fdI)
