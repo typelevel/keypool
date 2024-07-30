@@ -60,11 +60,11 @@ private[keypool] object RequestSemaphore {
       def nonEmpty(fa: ScalaQueue[A]) = fa.nonEmpty
     }
 
-  private case class State[F[_], A](waiting: F[A], permits: Long)(implicit
+  private case class State[F[_], A](waiting: F[A], permits: Int)(implicit
       @nowarn ev: BackingQueue[F, A]
   )
 
-  def apply[F[_]](fairness: Fairness, n: Long)(implicit
+  def apply[F[_]](fairness: Fairness, n: Int)(implicit
       F: GenConcurrent[F, _]
   ): F[RequestSemaphore[F]] = {
     require(n >= 0, s"n must be nonnegative, was: $n")
