@@ -321,6 +321,7 @@ object KeyPool {
       val kpMaxPerKey: A => Int,
       val kpMaxIdle: Int,
       val kpMaxTotal: Int,
+      val fairness: Boolean,
       val onReaperException: Throwable => F[Unit]
   ) {
     private def copy(
@@ -331,6 +332,7 @@ object KeyPool {
         kpMaxPerKey: A => Int = this.kpMaxPerKey,
         kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
+        fairness: Boolean = this.fairness,
         onReaperException: Throwable => F[Unit] = this.onReaperException
     ): Builder[F, A, B] = new Builder[F, A, B](
       kpRes,
@@ -340,6 +342,7 @@ object KeyPool {
       kpMaxPerKey,
       kpMaxIdle,
       kpMaxTotal,
+      fairness,
       onReaperException
     )
 
@@ -369,6 +372,9 @@ object KeyPool {
     def withMaxTotal(total: Int): Builder[F, A, B] =
       copy(kpMaxTotal = total)
 
+    def withFairness(fairness: Boolean): Builder[F, A, B] =
+      copy(fairness = fairness)
+
     def withOnReaperException(f: Throwable => F[Unit]): Builder[F, A, B] =
       copy(onReaperException = f)
 
@@ -379,7 +385,10 @@ object KeyPool {
         kpVar <- Resource.make(
           Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
         )(kpVar => KeyPool.destroy(kpVar))
-        kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fifo, kpMaxTotal))
+        kpMaxTotalSem <- fairness match {
+          case true => Resource.eval(RequestSemaphore[F](Fifo, kpMaxTotal))
+          case false => Resource.eval(RequestSemaphore[F](Lifo, kpMaxTotal))
+        }
         _ <- (idleTimeAllowedInPool, durationBetweenEvictionRuns) match {
           case (fdI: FiniteDuration, fdE: FiniteDuration) if fdE >= 0.seconds =>
             val idleNanos = 0.seconds.max(fdI)
@@ -413,6 +422,7 @@ object KeyPool {
       Defaults.maxPerKey,
       Defaults.maxIdle,
       Defaults.maxTotal,
+      Defaults.fairness,
       Defaults.onReaperException[F]
     )
 
@@ -429,6 +439,7 @@ object KeyPool {
       def maxPerKey[K](k: K): Int = Function.const(100)(k)
       val maxIdle = 100
       val maxTotal = 100
+      val fairness = true // defaults to serve requests in Fifo order
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)
       }

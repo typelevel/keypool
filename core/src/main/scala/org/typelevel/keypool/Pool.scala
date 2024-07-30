@@ -77,6 +77,7 @@ object Pool {
       val durationBetweenEvictionRuns: Duration,
       val kpMaxIdle: Int,
       val kpMaxTotal: Int,
+      val fairness: Boolean,
       val onReaperException: Throwable => F[Unit]
   ) {
     private def copy(
@@ -86,6 +87,7 @@ object Pool {
         durationBetweenEvictionRuns: Duration = this.durationBetweenEvictionRuns,
         kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
+        fairness: Boolean = this.fairness,
         onReaperException: Throwable => F[Unit] = this.onReaperException
     ): Builder[F, B] = new Builder[F, B](
       kpRes,
@@ -94,6 +96,7 @@ object Pool {
       durationBetweenEvictionRuns,
       kpMaxIdle,
       kpMaxTotal,
+      fairness,
       onReaperException
     )
 
@@ -120,6 +123,9 @@ object Pool {
     def withMaxTotal(total: Int): Builder[F, B] =
       copy(kpMaxTotal = total)
 
+    def withFairness(fairness: Boolean): Builder[F, B] =
+      copy(fairness = fairness)
+
     def withOnReaperException(f: Throwable => F[Unit]): Builder[F, B] =
       copy(onReaperException = f)
 
@@ -132,6 +138,7 @@ object Pool {
         kpMaxPerKey = _ => kpMaxTotal,
         kpMaxIdle = kpMaxIdle,
         kpMaxTotal = kpMaxTotal,
+        fairness = fairness,
         onReaperException = onReaperException
       )
 
@@ -155,6 +162,7 @@ object Pool {
       Defaults.durationBetweenEvictionRuns,
       Defaults.maxIdle,
       Defaults.maxTotal,
+      Defaults.fairness,
       Defaults.onReaperException[F]
     )
 
@@ -170,6 +178,7 @@ object Pool {
       val durationBetweenEvictionRuns = 5.seconds
       val maxIdle = 100
       val maxTotal = 100
+      val fairness = true // defaults to serve requests in Fifo order
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)
       }
