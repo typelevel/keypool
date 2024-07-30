@@ -81,10 +81,10 @@ class RequestSemaphoreSpec extends CatsEffectSuite {
       sem <- RequestSemaphore[IO](Fifo, 1)
       ref <- IO.ref(List.empty[Int])
       gate <- CountDownLatch[IO](4)
-      _ <- action(sem, ref, gate, 1).start *> IO.sleep(10.milli)
-      _ <- action(sem, ref, gate, 2).start *> IO.sleep(10.milli)
-      _ <- action(sem, ref, gate, 3).start *> IO.sleep(10.milli)
-      _ <- action(sem, ref, gate, 4).start *> IO.sleep(10.milli)
+      _ <- action(sem, ref, gate, 1).start *> IO.sleep(15.milli)
+      _ <- action(sem, ref, gate, 2).start *> IO.sleep(15.milli)
+      _ <- action(sem, ref, gate, 3).start *> IO.sleep(15.milli)
+      _ <- action(sem, ref, gate, 4).start
       _ <- gate.await // wait for all the actions to finish
       xs <- ref.get
     } yield xs
@@ -105,10 +105,10 @@ class RequestSemaphoreSpec extends CatsEffectSuite {
       sem <- RequestSemaphore[IO](Lifo, 1)
       ref <- IO.ref(List.empty[Int])
       gate <- CountDownLatch[IO](4)
-      _ <- action(sem, ref, gate, 1).start *> IO.sleep(10.milli)
-      _ <- action(sem, ref, gate, 2).start *> IO.sleep(10.milli)
-      _ <- action(sem, ref, gate, 3).start *> IO.sleep(10.milli)
-      _ <- action(sem, ref, gate, 4).start *> IO.sleep(10.milli)
+      _ <- action(sem, ref, gate, 1).start *> IO.sleep(15.milli)
+      _ <- action(sem, ref, gate, 2).start *> IO.sleep(15.milli)
+      _ <- action(sem, ref, gate, 3).start *> IO.sleep(15.milli)
+      _ <- action(sem, ref, gate, 4).start
       _ <- gate.await // wait for all the actions to finish
       xs <- ref.get
     } yield xs
