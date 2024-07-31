@@ -207,6 +207,64 @@ class PoolSpec extends CatsEffectSuite {
       }
   }
 
+  test("requests served in FIFO order by default") {
+    Pool
+      .Builder(
+        Ref.of[IO, Int](1),
+        nothing
+      )
+      .withMaxTotal(1)
+      .build
+      .use { pool =>
+        for {
+          ref <- IO.ref(List.empty[Int])
+          gate <- CountDownLatch[IO](4)
+          f1 <- reqAction(pool, ref, gate, 1).start <* IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 2).start *> IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 3).start *> IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 4).start *> IO.sleep(20.milli)
+          _ <- f1.cancel
+          _ <- gate.await
+          order <- ref.get
+        } yield assertEquals(order, List(1, 2, 3, 4))
+      }
+  }
+
+  test("requests served in LIFO order if fairness is false") {
+    Pool
+      .Builder(
+        Ref.of[IO, Int](1),
+        nothing
+      )
+      .withMaxTotal(1)
+      .withFairness(false)
+      .build
+      .use { pool =>
+        for {
+          ref <- IO.ref(List.empty[Int])
+          gate <- CountDownLatch[IO](4)
+          f1 <- reqAction(pool, ref, gate, 1).start <* IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 2).start *> IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 3).start *> IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 4).start *> IO.sleep(20.milli)
+          _ <- f1.cancel
+          _ <- gate.await
+          order <- ref.get
+        } yield assertEquals(order, List(1, 4, 3, 2))
+      }
+  }
+
+  private def reqAction(
+      pool: Pool[IO, Ref[IO, Int]],
+      ref: Ref[IO, List[Int]],
+      gate: CountDownLatch[IO],
+      id: Int
+  ) =
+    if (id == 1)
+      pool.take.use(_ => ref.update(l => l :+ id) *> gate.release *> IO.never)
+    else
+      pool.take.use(_ => ref.update(l => l :+ id) *> gate.release)
+
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void
 }
