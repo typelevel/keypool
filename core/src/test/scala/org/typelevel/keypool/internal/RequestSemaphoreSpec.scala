@@ -69,22 +69,15 @@ class RequestSemaphoreSpec extends CatsEffectSuite {
   }
 
   test("acquire permits in FIFO order") {
-    def action(
-        sem: RequestSemaphore[IO],
-        ref: Ref[IO, List[Int]],
-        gate: CountDownLatch[IO],
-        id: Int
-    ): IO[Unit] =
-      sem.permit.surround(ref.update(xs => xs :+ id) *> IO.sleep(1.second) *> gate.release)
-
     val r = for {
       sem <- RequestSemaphore[IO](Fifo, 1)
       ref <- IO.ref(List.empty[Int])
       gate <- CountDownLatch[IO](4)
-      _ <- action(sem, ref, gate, 1).start *> IO.sleep(15.milli)
-      _ <- action(sem, ref, gate, 2).start *> IO.sleep(15.milli)
-      _ <- action(sem, ref, gate, 3).start *> IO.sleep(15.milli)
-      _ <- action(sem, ref, gate, 4).start
+      f1 <- action(sem, ref, gate, 1).start <* IO.sleep(20.milli)
+      _ <- action(sem, ref, gate, 2).start *> IO.sleep(20.milli)
+      _ <- action(sem, ref, gate, 3).start *> IO.sleep(20.milli)
+      _ <- action(sem, ref, gate, 4).start *> IO.sleep(20.milli)
+      _ <- f1.cancel
       _ <- gate.await // wait for all the actions to finish
       xs <- ref.get
     } yield xs
@@ -93,22 +86,15 @@ class RequestSemaphoreSpec extends CatsEffectSuite {
   }
 
   test("acquire permits in LIFO order") {
-    def action(
-        sem: RequestSemaphore[IO],
-        ref: Ref[IO, List[Int]],
-        gate: CountDownLatch[IO],
-        id: Int
-    ): IO[Unit] =
-      sem.permit.surround(ref.update(xs => xs :+ id) *> IO.sleep(1.second) *> gate.release)
-
     val r = for {
       sem <- RequestSemaphore[IO](Lifo, 1)
       ref <- IO.ref(List.empty[Int])
       gate <- CountDownLatch[IO](4)
-      _ <- action(sem, ref, gate, 1).start *> IO.sleep(15.milli)
-      _ <- action(sem, ref, gate, 2).start *> IO.sleep(15.milli)
-      _ <- action(sem, ref, gate, 3).start *> IO.sleep(15.milli)
-      _ <- action(sem, ref, gate, 4).start
+      f1 <- action(sem, ref, gate, 1).start <* IO.sleep(20.milli)
+      _ <- action(sem, ref, gate, 2).start *> IO.sleep(20.milli)
+      _ <- action(sem, ref, gate, 3).start *> IO.sleep(20.milli)
+      _ <- action(sem, ref, gate, 4).start *> IO.sleep(20.milli)
+      _ <- f1.cancel
       _ <- gate.await // wait for all the actions to finish
       xs <- ref.get
     } yield xs
@@ -116,4 +102,14 @@ class RequestSemaphoreSpec extends CatsEffectSuite {
     assertIO(r, List(1, 4, 3, 2))
   }
 
+  private def action(
+      sem: RequestSemaphore[IO],
+      ref: Ref[IO, List[Int]],
+      gate: CountDownLatch[IO],
+      id: Int
+  ): IO[Unit] =
+    if (id == 1)
+      sem.permit.surround(ref.update(xs => xs :+ id) *> gate.release *> IO.never)
+    else
+      sem.permit.surround(ref.update(xs => xs :+ id) *> gate.release)
 }

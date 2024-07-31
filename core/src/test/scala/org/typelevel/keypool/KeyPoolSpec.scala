@@ -227,6 +227,7 @@ class KeyPoolSpec extends CatsEffectSuite {
         } yield assert(attempt1.isLeft && attempt2.isRight)
       }
   }
+
   test("requests served in FIFO order by default") {
     KeyPool
       .Builder(
@@ -239,10 +240,11 @@ class KeyPoolSpec extends CatsEffectSuite {
         for {
           ref <- IO.ref(List.empty[Int])
           gate <- CountDownLatch[IO](4)
-          _ <- reqAction(pool, ref, gate, 1).start *> IO.sleep(15.milli)
-          _ <- reqAction(pool, ref, gate, 2).start *> IO.sleep(15.milli)
-          _ <- reqAction(pool, ref, gate, 3).start *> IO.sleep(15.milli)
-          _ <- reqAction(pool, ref, gate, 4).start *> IO.sleep(15.milli)
+          f1 <- reqAction(pool, ref, gate, 1).start <* IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 2).start *> IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 3).start *> IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 4).start *> IO.sleep(20.milli)
+          _ <- f1.cancel
           _ <- gate.await
           order <- ref.get
         } yield assertEquals(order, List(1, 2, 3, 4))
@@ -262,10 +264,11 @@ class KeyPoolSpec extends CatsEffectSuite {
         for {
           ref <- IO.ref(List.empty[Int])
           gate <- CountDownLatch[IO](4)
-          _ <- reqAction(pool, ref, gate, 1).start *> IO.sleep(15.milli)
-          _ <- reqAction(pool, ref, gate, 2).start *> IO.sleep(15.milli)
-          _ <- reqAction(pool, ref, gate, 3).start *> IO.sleep(15.milli)
-          _ <- reqAction(pool, ref, gate, 4).start *> IO.sleep(15.milli)
+          f1 <- reqAction(pool, ref, gate, 1).start <* IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 2).start *> IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 3).start *> IO.sleep(20.milli)
+          _ <- reqAction(pool, ref, gate, 4).start *> IO.sleep(20.milli)
+          _ <- f1.cancel
           _ <- gate.await
           order <- ref.get
         } yield assertEquals(order, List(1, 4, 3, 2))
@@ -278,7 +281,10 @@ class KeyPoolSpec extends CatsEffectSuite {
       gate: CountDownLatch[IO],
       id: Int
   ) =
-    pool.take(1).use(_ => ref.update(l => l :+ id) *> IO.sleep(1.second) *> gate.release)
+    if (id == 1)
+      pool.take(1).use(_ => ref.update(l => l :+ id) *> gate.release *> IO.never)
+    else
+      pool.take(1).use(_ => ref.update(l => l :+ id) *> gate.release)
 
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void
