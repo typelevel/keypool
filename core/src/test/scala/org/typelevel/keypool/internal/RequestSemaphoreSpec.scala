@@ -23,7 +23,8 @@ package org.typelevel.keypool.internal
 
 import munit.CatsEffectSuite
 import cats.effect._
-import cats.effect.std.CountDownLatch
+import cats.effect.testkit.TestControl
+
 import scala.concurrent.duration._
 
 class RequestSemaphoreSpec extends CatsEffectSuite {
@@ -69,47 +70,48 @@ class RequestSemaphoreSpec extends CatsEffectSuite {
   }
 
   test("acquire permits in FIFO order") {
-    val r = for {
-      sem <- RequestSemaphore[IO](Fifo, 1)
-      ref <- IO.ref(List.empty[Int])
-      gate <- CountDownLatch[IO](4)
-      f1 <- action(sem, ref, gate, 1).start <* IO.sleep(20.milli)
-      _ <- action(sem, ref, gate, 2).start *> IO.sleep(20.milli)
-      _ <- action(sem, ref, gate, 3).start *> IO.sleep(20.milli)
-      _ <- action(sem, ref, gate, 4).start *> IO.sleep(20.milli)
-      _ <- f1.cancel
-      _ <- gate.await // wait for all the actions to finish
-      xs <- ref.get
-    } yield xs
+    TestControl.executeEmbed {
+      val r = for {
+        sem <- RequestSemaphore[IO](Fifo, 1)
+        ref <- IO.ref(List.empty[Int])
+        f1 <- action(sem, ref, 1).start <* IO.sleep(1.milli)
+        f2 <- action(sem, ref, 2).start <* IO.sleep(1.milli)
+        f3 <- action(sem, ref, 3).start <* IO.sleep(1.milli)
+        f4 <- action(sem, ref, 4).start <* IO.sleep(1.milli)
+        _ <- f1.cancel
+        _ <- f2.join *> f3.join *> f4.join
+        xs <- ref.get
+      } yield xs
 
-    assertIO(r, List(1, 2, 3, 4))
+      assertIO(r, List(1, 2, 3, 4))
+    }
   }
 
   test("acquire permits in LIFO order") {
-    val r = for {
-      sem <- RequestSemaphore[IO](Lifo, 1)
-      ref <- IO.ref(List.empty[Int])
-      gate <- CountDownLatch[IO](4)
-      f1 <- action(sem, ref, gate, 1).start <* IO.sleep(20.milli)
-      _ <- action(sem, ref, gate, 2).start *> IO.sleep(20.milli)
-      _ <- action(sem, ref, gate, 3).start *> IO.sleep(20.milli)
-      _ <- action(sem, ref, gate, 4).start *> IO.sleep(20.milli)
-      _ <- f1.cancel
-      _ <- gate.await // wait for all the actions to finish
-      xs <- ref.get
-    } yield xs
+    TestControl.executeEmbed {
+      val r = for {
+        sem <- RequestSemaphore[IO](Lifo, 1)
+        ref <- IO.ref(List.empty[Int])
+        f1 <- action(sem, ref, 1).start <* IO.sleep(1.milli)
+        f2 <- action(sem, ref, 2).start <* IO.sleep(1.milli)
+        f3 <- action(sem, ref, 3).start <* IO.sleep(1.milli)
+        f4 <- action(sem, ref, 4).start <* IO.sleep(1.milli)
+        _ <- f1.cancel
+        _ <- f2.join *> f3.join *> f4.join
+        xs <- ref.get
+      } yield xs
 
-    assertIO(r, List(1, 4, 3, 2))
+      assertIO(r, List(1, 4, 3, 2))
+    }
   }
 
   private def action(
       sem: RequestSemaphore[IO],
       ref: Ref[IO, List[Int]],
-      gate: CountDownLatch[IO],
       id: Int
   ): IO[Unit] =
     if (id == 1)
-      sem.permit.surround(ref.update(xs => xs :+ id) *> gate.release *> IO.never)
+      sem.permit.surround(ref.update(xs => xs :+ id) *> IO.never)
     else
-      sem.permit.surround(ref.update(xs => xs :+ id) *> gate.release)
+      sem.permit.surround(ref.update(xs => xs :+ id))
 }

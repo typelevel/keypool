@@ -229,62 +229,63 @@ class KeyPoolSpec extends CatsEffectSuite {
   }
 
   test("requests served in FIFO order by default") {
-    KeyPool
-      .Builder(
-        (i: Int) => Ref.of[IO, Int](i),
-        nothing
-      )
-      .withMaxTotal(1)
-      .build
-      .use { pool =>
-        for {
-          ref <- IO.ref(List.empty[Int])
-          gate <- CountDownLatch[IO](4)
-          f1 <- reqAction(pool, ref, gate, 1).start <* IO.sleep(20.milli)
-          _ <- reqAction(pool, ref, gate, 2).start *> IO.sleep(20.milli)
-          _ <- reqAction(pool, ref, gate, 3).start *> IO.sleep(20.milli)
-          _ <- reqAction(pool, ref, gate, 4).start *> IO.sleep(20.milli)
-          _ <- f1.cancel
-          _ <- gate.await
-          order <- ref.get
-        } yield assertEquals(order, List(1, 2, 3, 4))
-      }
+    TestControl.executeEmbed {
+      KeyPool
+        .Builder(
+          (i: Int) => Ref.of[IO, Int](i),
+          nothing
+        )
+        .withMaxTotal(1)
+        .build
+        .use { pool =>
+          for {
+            ref <- IO.ref(List.empty[Int])
+            f1 <- reqAction(pool, ref, 1).start <* IO.sleep(1.milli)
+            f2 <- reqAction(pool, ref, 2).start <* IO.sleep(1.milli)
+            f3 <- reqAction(pool, ref, 3).start <* IO.sleep(1.milli)
+            f4 <- reqAction(pool, ref, 4).start <* IO.sleep(1.milli)
+            _ <- f1.cancel
+            _ <- f2.join *> f3.join *> f4.join
+            order <- ref.get
+          } yield assertEquals(order, List(1, 2, 3, 4))
+        }
+    }
   }
 
   test("requests served in LIFO order if fairness is false") {
-    KeyPool
-      .Builder(
-        (i: Int) => Ref.of[IO, Int](i),
-        nothing
-      )
-      .withMaxTotal(1)
-      .withFairness(false)
-      .build
-      .use { pool =>
-        for {
-          ref <- IO.ref(List.empty[Int])
-          gate <- CountDownLatch[IO](4)
-          f1 <- reqAction(pool, ref, gate, 1).start <* IO.sleep(20.milli)
-          _ <- reqAction(pool, ref, gate, 2).start *> IO.sleep(20.milli)
-          _ <- reqAction(pool, ref, gate, 3).start *> IO.sleep(20.milli)
-          _ <- reqAction(pool, ref, gate, 4).start *> IO.sleep(20.milli)
-          _ <- f1.cancel
-          _ <- gate.await
-          order <- ref.get
-        } yield assertEquals(order, List(1, 4, 3, 2))
-      }
+    TestControl.executeEmbed {
+      KeyPool
+        .Builder(
+          (i: Int) => Ref.of[IO, Int](i),
+          nothing
+        )
+        .withMaxTotal(1)
+        .withFairness(false)
+        .build
+        .use { pool =>
+          for {
+            ref <- IO.ref(List.empty[Int])
+            f1 <- reqAction(pool, ref, 1).start <* IO.sleep(1.milli)
+            f2 <- reqAction(pool, ref, 2).start <* IO.sleep(1.milli)
+            f3 <- reqAction(pool, ref, 3).start <* IO.sleep(1.milli)
+            f4 <- reqAction(pool, ref, 4).start <* IO.sleep(1.milli)
+            _ <- f1.cancel
+            _ <- f2.join *> f3.join *> f4.join
+            order <- ref.get
+          } yield assertEquals(order, List(1, 4, 3, 2))
+        }
+    }
   }
 
   private def reqAction(
       pool: KeyPool[IO, Int, Ref[IO, Int]],
       ref: Ref[IO, List[Int]],
-      gate: CountDownLatch[IO],
       id: Int
   ) =
     if (id == 1)
-      pool.take(1).use(_ => ref.update(l => l :+ id) *> gate.release *> IO.never)
+      pool.take(1).use(_ => ref.update(l => l :+ id) *> IO.never)
     else
-      pool.take(1).use(_ => ref.update(l => l :+ id) *> gate.release)
+      pool.take(1).use(_ => ref.update(l => l :+ id))
 
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void
