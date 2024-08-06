@@ -80,6 +80,7 @@ class RequestSemaphoreSpec extends CatsEffectSuite {
       _ <- IO.sleep(10.milli)
       _ <- f2.cancel // cancel before acquiring
       _ <- f1.cancel
+      _ <- sem.permit.surround(IO.unit)
       r <- ref.get
     } yield r
     assertIO(r, 0)
