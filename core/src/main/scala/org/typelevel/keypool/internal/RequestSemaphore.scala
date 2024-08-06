@@ -92,7 +92,7 @@ private[keypool] object RequestSemaphore {
               if (permits == 0) {
                 State(B.offer(waiting, wait), permits) -> poll(wait.get).onCancel(cleanup)
               } else
-                State(waiting, permits - 1) -> ().pure[F]
+                State(waiting, permits - 1) -> F.unit
             }.flatten
           }
         }
@@ -103,7 +103,7 @@ private[keypool] object RequestSemaphore {
             val (rest, next) = B.take(waiting)
             State(rest, permits) -> next.complete(()).void
           } else
-            State(waiting, permits + 1) -> ().pure[F]
+            State(waiting, permits + 1) -> F.unit
         }
 
       def permit: Resource[F, Unit] =
