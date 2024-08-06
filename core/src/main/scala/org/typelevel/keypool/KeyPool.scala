@@ -321,7 +321,7 @@ object KeyPool {
       val kpMaxPerKey: A => Int,
       val kpMaxIdle: Int,
       val kpMaxTotal: Int,
-      val fairness: Boolean,
+      val fairness: Fairness,
       val onReaperException: Throwable => F[Unit]
   ) {
     private def copy(
@@ -332,7 +332,7 @@ object KeyPool {
         kpMaxPerKey: A => Int = this.kpMaxPerKey,
         kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
-        fairness: Boolean = this.fairness,
+        fairness: Fairness = this.fairness,
         onReaperException: Throwable => F[Unit] = this.onReaperException
     ): Builder[F, A, B] = new Builder[F, A, B](
       kpRes,
@@ -372,7 +372,7 @@ object KeyPool {
     def withMaxTotal(total: Int): Builder[F, A, B] =
       copy(kpMaxTotal = total)
 
-    def withFairness(fairness: Boolean): Builder[F, A, B] =
+    def withFairness(fairness: Fairness): Builder[F, A, B] =
       copy(fairness = fairness)
 
     def withOnReaperException(f: Throwable => F[Unit]): Builder[F, A, B] =
@@ -386,8 +386,8 @@ object KeyPool {
           Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
         )(kpVar => KeyPool.destroy(kpVar))
         kpMaxTotalSem <- fairness match {
-          case true => Resource.eval(RequestSemaphore[F](Fifo, kpMaxTotal))
-          case false => Resource.eval(RequestSemaphore[F](Lifo, kpMaxTotal))
+          case Fairness.Fifo => Resource.eval(RequestSemaphore[F](Fairness.Fifo, kpMaxTotal))
+          case Fairness.Lifo => Resource.eval(RequestSemaphore[F](Fairness.Lifo, kpMaxTotal))
         }
         _ <- (idleTimeAllowedInPool, durationBetweenEvictionRuns) match {
           case (fdI: FiniteDuration, fdE: FiniteDuration) if fdE >= 0.seconds =>
@@ -439,7 +439,7 @@ object KeyPool {
       def maxPerKey[K](k: K): Int = Function.const(100)(k)
       val maxIdle = 100
       val maxTotal = 100
-      val fairness = true // defaults to serve requests in Fifo order
+      val fairness = Fairness.Fifo
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)
       }

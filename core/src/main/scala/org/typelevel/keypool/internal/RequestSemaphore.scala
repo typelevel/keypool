@@ -27,9 +27,7 @@ import cats.effect.kernel._
 import scala.collection.immutable.{Queue => ScalaQueue}
 import scala.annotation.nowarn
 
-sealed trait Fairness
-case object Lifo extends Fairness
-case object Fifo extends Fairness
+import org.typelevel.keypool.Fairness
 
 // Derived from cats-effect MiniSemaphore
 // https://github.com/typelevel/cats-effect/blob/v3.5.4/kernel/shared/src/main/scala/cats/effect/kernel/MiniSemaphore.scala#L29
@@ -70,8 +68,8 @@ private[keypool] object RequestSemaphore {
     require(n >= 0, s"n must be nonnegative, was: $n")
 
     fairness match {
-      case Fifo => F.ref(State(ScalaQueue[Deferred[F, Unit]](), n)).map(semaphore(_))
-      case Lifo => F.ref(State(List.empty[Deferred[F, Unit]], n)).map(semaphore(_))
+      case Fairness.Fifo => F.ref(State(ScalaQueue[Deferred[F, Unit]](), n)).map(semaphore(_))
+      case Fairness.Lifo => F.ref(State(List.empty[Deferred[F, Unit]], n)).map(semaphore(_))
     }
   }
 

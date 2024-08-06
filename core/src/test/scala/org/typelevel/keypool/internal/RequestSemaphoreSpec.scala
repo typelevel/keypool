@@ -24,8 +24,9 @@ package org.typelevel.keypool.internal
 import munit.CatsEffectSuite
 import cats.effect._
 import cats.effect.testkit.TestControl
-
 import scala.concurrent.duration._
+
+import org.typelevel.keypool.Fairness._
 
 class RequestSemaphoreSpec extends CatsEffectSuite {
 

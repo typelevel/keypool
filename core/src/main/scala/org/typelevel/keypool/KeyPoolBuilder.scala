@@ -91,7 +91,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpVar <- Resource.make(
         Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
       )(kpVar => KeyPool.destroy(kpVar))
-      kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fifo, kpMaxTotal))
+      kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fairness.Fifo, kpMaxTotal))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)

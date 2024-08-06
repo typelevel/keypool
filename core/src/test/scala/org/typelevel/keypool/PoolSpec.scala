@@ -240,7 +240,7 @@ class PoolSpec extends CatsEffectSuite {
           nothing
         )
         .withMaxTotal(1)
-        .withFairness(false)
+        .withFairness(Fairness.Lifo)
         .build
         .use { pool =>
           for {
