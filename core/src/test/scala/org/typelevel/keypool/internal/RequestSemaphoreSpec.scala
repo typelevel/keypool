@@ -70,6 +70,21 @@ class RequestSemaphoreSpec extends CatsEffectSuite {
     assertIOBoolean(b)
   }
 
+  test("cancel an action while waiting for permit") {
+    val r = for {
+      sem <- RequestSemaphore[IO](Fifo, 1)
+      ref <- IO.ref(0)
+      f1 <- sem.permit.surround(IO.never).start
+      _ <- IO.sleep(10.milli)
+      f2 <- sem.permit.surround(ref.update(_ + 1)).start
+      _ <- IO.sleep(10.milli)
+      _ <- f2.cancel // cancel before acquiring
+      _ <- f1.cancel
+      r <- ref.get
+    } yield r
+    assertIO(r, 0)
+  }
+
   test("acquire permits in FIFO order") {
     TestControl.executeEmbed {
       val r = for {

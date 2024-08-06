@@ -78,20 +78,18 @@ private[keypool] object RequestSemaphore {
   )(implicit F: GenConcurrent[F, _], B: BackingQueue[G, Deferred[F, Unit]]): RequestSemaphore[F] = {
     new RequestSemaphore[F] {
       private def acquire: F[Unit] =
-        F.uncancelable { poll =>
-          F.deferred[Unit].flatMap { wait =>
-            val cleanup = state.update { case s @ State(waiting, permits) =>
-              if (B.nonEmpty(waiting))
-                State(B.cleanup(waiting, wait), permits)
-              else s
-            }
+        F.deferred[Unit].flatMap { wait =>
+          val cleanup = state.update { case s @ State(waiting, permits) =>
+            if (B.nonEmpty(waiting))
+              State(B.cleanup(waiting, wait), permits)
+            else s
+          }
 
-            state.modify { case State(waiting, permits) =>
-              if (permits == 0) {
-                State(B.offer(waiting, wait), permits) -> poll(wait.get).onCancel(cleanup)
-              } else
-                State(waiting, permits - 1) -> F.unit
-            }.flatten
+          state.flatModifyFull { case (poll, State(waiting, permits)) =>
+            if (permits == 0) {
+              State(B.offer(waiting, wait), permits) -> poll(wait.get).onCancel(cleanup)
+            } else
+              State(waiting, permits - 1) -> F.unit
           }
         }
 
