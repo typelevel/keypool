@@ -104,10 +104,6 @@ private[keypool] object RequestSemaphore {
 
       def permit: Resource[F, Unit] =
         Resource.makeFull((poll: Poll[F]) => poll(acquire))(_ => release)
-
-      // def withPermit[A](fa: F[A]): F[A] = F.uncancelable { poll =>
-      //   poll(acquire) >> poll(fa).guarantee(release)
-      // }
     }
   }
 }
