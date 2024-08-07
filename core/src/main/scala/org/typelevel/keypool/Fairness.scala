@@ -21,6 +21,12 @@
 
 package org.typelevel.keypool
 
+/**
+ * Fairness defines the order in which pending requests acquire a connection from the pool.
+ *
+ * Lifo will process requests in last-in-first-out order. Fifo will process requests in
+ * first-in-first-out order.
+ */
 sealed trait Fairness
 object Fairness {
   case object Lifo extends Fairness

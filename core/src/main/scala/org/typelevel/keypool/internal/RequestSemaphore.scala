@@ -29,8 +29,15 @@ import scala.annotation.nowarn
 
 import org.typelevel.keypool.Fairness
 
-// Derived from cats-effect MiniSemaphore
-// https://github.com/typelevel/cats-effect/blob/v3.5.4/kernel/shared/src/main/scala/cats/effect/kernel/MiniSemaphore.scala#L29
+/**
+ * RequestSemaphore moderates access to pooled connections by setting the number of permits
+ * available to the total number of connections. This is a custom semaphore implementation that only
+ * provides the `permit` operation. Additionally it takes a [[Fairness]] parameter, used to toggle
+ * the order in which requests acquire a permit.
+ *
+ * Derived from cats-effect MiniSemaphore
+ * https://github.com/typelevel/cats-effect/blob/v3.5.4/kernel/shared/src/main/scala/cats/effect/kernel/MiniSemaphore.scala#L29
+ */
 private[keypool] abstract class RequestSemaphore[F[_]] {
   def permit: Resource[F, Unit]
 }
