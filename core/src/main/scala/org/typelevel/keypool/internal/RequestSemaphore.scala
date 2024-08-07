@@ -36,11 +36,11 @@ private[keypool] abstract class RequestSemaphore[F[_]] {
 }
 
 private[keypool] object RequestSemaphore {
-  private trait BackingQueue[F[_], A] {
-    def cleanup(fa: F[A], elem: A): F[A]
-    def offer(fa: F[A], elem: A): F[A]
-    def take(fa: F[A]): (F[A], A)
-    def nonEmpty(fa: F[A]): Boolean
+  private trait BackingQueue[CC[_], A] {
+    def cleanup(fa: CC[A], elem: A): CC[A]
+    def offer(fa: CC[A], elem: A): CC[A]
+    def take(fa: CC[A]): (CC[A], A)
+    def nonEmpty(fa: CC[A]): Boolean
   }
 
   private implicit def listQueue[A <: AnyRef]: BackingQueue[List, A] = new BackingQueue[List, A] {
@@ -58,8 +58,8 @@ private[keypool] object RequestSemaphore {
       def nonEmpty(fa: ScalaQueue[A]) = fa.nonEmpty
     }
 
-  private case class State[F[_], A](waiting: F[A], permits: Int)(implicit
-      @nowarn ev: BackingQueue[F, A]
+  private case class State[CC[_], A](waiting: CC[A], permits: Int)(implicit
+      @nowarn ev: BackingQueue[CC, A]
   )
 
   def apply[F[_]](fairness: Fairness, n: Int)(implicit
@@ -73,9 +73,12 @@ private[keypool] object RequestSemaphore {
     }
   }
 
-  private def semaphore[F[_], G[_]](
-      state: Ref[F, State[G, Deferred[F, Unit]]]
-  )(implicit F: GenConcurrent[F, _], B: BackingQueue[G, Deferred[F, Unit]]): RequestSemaphore[F] = {
+  private def semaphore[F[_], CC[_]](
+      state: Ref[F, State[CC, Deferred[F, Unit]]]
+  )(implicit
+      F: GenConcurrent[F, _],
+      B: BackingQueue[CC, Deferred[F, Unit]]
+  ): RequestSemaphore[F] = {
     new RequestSemaphore[F] {
       private def acquire: F[Unit] =
         F.deferred[Unit].flatMap { wait =>
