@@ -228,6 +228,65 @@ class KeyPoolSpec extends CatsEffectSuite {
       }
   }
 
+  test("requests served in FIFO order by default") {
+    TestControl.executeEmbed {
+      KeyPool
+        .Builder(
+          (i: Int) => Ref.of[IO, Int](i),
+          nothing
+        )
+        .withMaxTotal(1)
+        .build
+        .use { pool =>
+          for {
+            ref <- IO.ref(List.empty[Int])
+            f1 <- reqAction(pool, ref, 1).start <* IO.sleep(1.milli)
+            f2 <- reqAction(pool, ref, 2).start <* IO.sleep(1.milli)
+            f3 <- reqAction(pool, ref, 3).start <* IO.sleep(1.milli)
+            f4 <- reqAction(pool, ref, 4).start <* IO.sleep(1.milli)
+            _ <- f1.cancel
+            _ <- f2.join *> f3.join *> f4.join
+            order <- ref.get
+          } yield assertEquals(order, List(1, 2, 3, 4))
+        }
+    }
+  }
+
+  test("requests served in LIFO order if fairness is false") {
+    TestControl.executeEmbed {
+      KeyPool
+        .Builder(
+          (i: Int) => Ref.of[IO, Int](i),
+          nothing
+        )
+        .withMaxTotal(1)
+        .withFairness(Fairness.Lifo)
+        .build
+        .use { pool =>
+          for {
+            ref <- IO.ref(List.empty[Int])
+            f1 <- reqAction(pool, ref, 1).start <* IO.sleep(1.milli)
+            f2 <- reqAction(pool, ref, 2).start <* IO.sleep(1.milli)
+            f3 <- reqAction(pool, ref, 3).start <* IO.sleep(1.milli)
+            f4 <- reqAction(pool, ref, 4).start <* IO.sleep(1.milli)
+            _ <- f1.cancel
+            _ <- f2.join *> f3.join *> f4.join
+            order <- ref.get
+          } yield assertEquals(order, List(1, 4, 3, 2))
+        }
+    }
+  }
+
+  private def reqAction(
+      pool: KeyPool[IO, Int, Ref[IO, Int]],
+      ref: Ref[IO, List[Int]],
+      id: Int
+  ) =
+    if (id == 1)
+      pool.take(1).use(_ => ref.update(l => l :+ id) *> IO.never)
+    else
+      pool.take(1).use(_ => ref.update(l => l :+ id))
+
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void
 

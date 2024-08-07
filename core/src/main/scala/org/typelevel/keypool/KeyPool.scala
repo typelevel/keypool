@@ -24,7 +24,6 @@ package org.typelevel.keypool
 import cats._
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.spawn._
-import cats.effect.std.Semaphore
 import cats.syntax.all._
 import scala.concurrent.duration._
 import org.typelevel.keypool.internal._
@@ -67,7 +66,7 @@ object KeyPool {
       private[keypool] val kpMaxPerKey: A => Int,
       private[keypool] val kpMaxIdle: Int,
       private[keypool] val kpMaxTotal: Int,
-      private[keypool] val kpMaxTotalSem: Semaphore[F],
+      private[keypool] val kpMaxTotalSem: RequestSemaphore[F],
       private[keypool] val kpVar: Ref[F, PoolMap[A, (B, F[Unit])]]
   ) extends KeyPool[F, A, B] {
 
@@ -322,6 +321,7 @@ object KeyPool {
       val kpMaxPerKey: A => Int,
       val kpMaxIdle: Int,
       val kpMaxTotal: Int,
+      val fairness: Fairness,
       val onReaperException: Throwable => F[Unit]
   ) {
     private def copy(
@@ -332,6 +332,7 @@ object KeyPool {
         kpMaxPerKey: A => Int = this.kpMaxPerKey,
         kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
+        fairness: Fairness = this.fairness,
         onReaperException: Throwable => F[Unit] = this.onReaperException
     ): Builder[F, A, B] = new Builder[F, A, B](
       kpRes,
@@ -341,6 +342,7 @@ object KeyPool {
       kpMaxPerKey,
       kpMaxIdle,
       kpMaxTotal,
+      fairness,
       onReaperException
     )
 
@@ -370,6 +372,9 @@ object KeyPool {
     def withMaxTotal(total: Int): Builder[F, A, B] =
       copy(kpMaxTotal = total)
 
+    def withFairness(fairness: Fairness): Builder[F, A, B] =
+      copy(fairness = fairness)
+
     def withOnReaperException(f: Throwable => F[Unit]): Builder[F, A, B] =
       copy(onReaperException = f)
 
@@ -380,7 +385,7 @@ object KeyPool {
         kpVar <- Resource.make(
           Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
         )(kpVar => KeyPool.destroy(kpVar))
-        kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
+        kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](fairness, kpMaxTotal))
         _ <- (idleTimeAllowedInPool, durationBetweenEvictionRuns) match {
           case (fdI: FiniteDuration, fdE: FiniteDuration) if fdE >= 0.seconds =>
             val idleNanos = 0.seconds.max(fdI)
@@ -414,6 +419,7 @@ object KeyPool {
       Defaults.maxPerKey,
       Defaults.maxIdle,
       Defaults.maxTotal,
+      Defaults.fairness,
       Defaults.onReaperException[F]
     )
 
@@ -430,6 +436,7 @@ object KeyPool {
       def maxPerKey[K](k: K): Int = Function.const(100)(k)
       val maxIdle = 100
       val maxTotal = 100
+      val fairness = Fairness.Fifo
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)
       }

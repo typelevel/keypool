@@ -26,8 +26,8 @@ import cats._
 import cats.syntax.all._
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.spawn._
-import cats.effect.std.Semaphore
 import scala.concurrent.duration._
+import org.typelevel.keypool.internal._
 
 @deprecated("use KeyPool.Builder", "0.4.7")
 final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
@@ -91,7 +91,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpVar <- Resource.make(
         Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
       )(kpVar => KeyPool.destroy(kpVar))
-      kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
+      kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fairness.Fifo, kpMaxTotal))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
