@@ -68,7 +68,7 @@ private[keypool] object RequestSemaphore {
     require(n >= 0, s"n must be nonnegative, was: $n")
 
     fairness match {
-      case Fairness.Fifo => F.ref(State(ScalaQueue[Deferred[F, Unit]](), n)).map(semaphore(_))
+      case Fairness.Fifo => F.ref(State(ScalaQueue.empty[Deferred[F, Unit]], n)).map(semaphore(_))
       case Fairness.Lifo => F.ref(State(List.empty[Deferred[F, Unit]], n)).map(semaphore(_))
     }
   }

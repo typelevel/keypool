@@ -385,10 +385,7 @@ object KeyPool {
         kpVar <- Resource.make(
           Ref[F].of[PoolMap[A, (B, F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, F[Unit])]]))
         )(kpVar => KeyPool.destroy(kpVar))
-        kpMaxTotalSem <- fairness match {
-          case Fairness.Fifo => Resource.eval(RequestSemaphore[F](Fairness.Fifo, kpMaxTotal))
-          case Fairness.Lifo => Resource.eval(RequestSemaphore[F](Fairness.Lifo, kpMaxTotal))
-        }
+        kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](fairness, kpMaxTotal))
         _ <- (idleTimeAllowedInPool, durationBetweenEvictionRuns) match {
           case (fdI: FiniteDuration, fdE: FiniteDuration) if fdE >= 0.seconds =>
             val idleNanos = 0.seconds.max(fdI)
