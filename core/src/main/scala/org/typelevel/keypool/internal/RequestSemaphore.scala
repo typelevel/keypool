@@ -70,15 +70,19 @@ private[keypool] object RequestSemaphore {
   )
 
   def apply[F[_]](fairness: Fairness, numPermits: Int)(implicit
-      F: GenConcurrent[F, _]
+      F: Concurrent[F]
   ): F[RequestSemaphore[F]] = {
-    require(numPermits >= 0, s"numPermits must be nonnegative, was: $numPermits")
 
-    fairness match {
-      case Fairness.Fifo =>
-        F.ref(State(ScalaQueue.empty[Deferred[F, Unit]], numPermits)).map(semaphore(_))
-      case Fairness.Lifo =>
-        F.ref(State(List.empty[Deferred[F, Unit]], numPermits)).map(semaphore(_))
+    def require(condition: Boolean, errorMessage: => String): F[Unit] =
+      if (condition) F.unit else new IllegalArgumentException(errorMessage).raiseError[F, Unit]
+
+    require(numPermits >= 0, s"numPermits must be nonnegative, was: $numPermits") *> {
+      fairness match {
+        case Fairness.Fifo =>
+          F.ref(State(ScalaQueue.empty[Deferred[F, Unit]], numPermits)).map(semaphore(_))
+        case Fairness.Lifo =>
+          F.ref(State(List.empty[Deferred[F, Unit]], numPermits)).map(semaphore(_))
+      }
     }
   }
 
