@@ -27,7 +27,7 @@ package org.typelevel.keypool
  * Lifo will process requests in last-in-first-out order. Fifo will process requests in
  * first-in-first-out order.
  */
-sealed trait Fairness
+sealed trait Fairness extends Product with Serializable
 object Fairness {
   case object Lifo extends Fairness
   case object Fifo extends Fairness
