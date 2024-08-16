@@ -24,6 +24,7 @@ package org.typelevel.keypool
 import cats.syntax.all._
 import cats.effect._
 import cats.effect.std.CountDownLatch
+import cats.effect.testkit.TestControl
 import scala.concurrent.duration._
 import munit.CatsEffectSuite
 
@@ -206,6 +207,65 @@ class PoolSpec extends CatsEffectSuite {
         } yield assert(attempt1.isLeft && attempt2.isRight)
       }
   }
+
+  test("requests served in FIFO order by default") {
+    TestControl.executeEmbed {
+      Pool
+        .Builder(
+          Ref.of[IO, Int](1),
+          nothing
+        )
+        .withMaxTotal(1)
+        .build
+        .use { pool =>
+          for {
+            ref <- IO.ref(List.empty[Int])
+            f1 <- reqAction(pool, ref, 1).start <* IO.sleep(1.milli)
+            f2 <- reqAction(pool, ref, 2).start <* IO.sleep(1.milli)
+            f3 <- reqAction(pool, ref, 3).start <* IO.sleep(1.milli)
+            f4 <- reqAction(pool, ref, 4).start <* IO.sleep(1.milli)
+            _ <- f1.cancel
+            _ <- f2.join *> f3.join *> f4.join
+            order <- ref.get
+          } yield assertEquals(order, List(1, 2, 3, 4))
+        }
+    }
+  }
+
+  test("requests served in LIFO order if fairness is false") {
+    TestControl.executeEmbed {
+      Pool
+        .Builder(
+          Ref.of[IO, Int](1),
+          nothing
+        )
+        .withMaxTotal(1)
+        .withFairness(Fairness.Lifo)
+        .build
+        .use { pool =>
+          for {
+            ref <- IO.ref(List.empty[Int])
+            f1 <- reqAction(pool, ref, 1).start <* IO.sleep(1.milli)
+            f2 <- reqAction(pool, ref, 2).start <* IO.sleep(1.milli)
+            f3 <- reqAction(pool, ref, 3).start <* IO.sleep(1.milli)
+            f4 <- reqAction(pool, ref, 4).start <* IO.sleep(1.milli)
+            _ <- f1.cancel
+            _ <- f2.join *> f3.join *> f4.join
+            order <- ref.get
+          } yield assertEquals(order, List(1, 4, 3, 2))
+        }
+    }
+  }
+
+  private def reqAction(
+      pool: Pool[IO, Ref[IO, Int]],
+      ref: Ref[IO, List[Int]],
+      id: Int
+  ) =
+    if (id == 1)
+      pool.take.use(_ => ref.update(l => l :+ id) *> IO.never)
+    else
+      pool.take.use(_ => ref.update(l => l :+ id))
 
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void
