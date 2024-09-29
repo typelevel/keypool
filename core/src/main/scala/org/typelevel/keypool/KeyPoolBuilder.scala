@@ -21,7 +21,6 @@
 
 package org.typelevel.keypool
 
-import internal.{PoolList, PoolMap}
 import cats._
 import cats.syntax.all._
 import cats.effect.kernel._
