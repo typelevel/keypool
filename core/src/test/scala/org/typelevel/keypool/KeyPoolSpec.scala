@@ -40,7 +40,7 @@ class KeyPoolSpec extends CatsEffectSuite {
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxPerKey(Function.const(10))
       .withMaxTotal(10)
-      .withOnReaperException({ (_: Throwable) => IO.unit })
+      .withOnReaperException((_: Throwable) => IO.unit)
       .build
       .use(k =>
         k.take(1)
@@ -60,7 +60,7 @@ class KeyPoolSpec extends CatsEffectSuite {
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxPerKey(Function.const(10))
       .withMaxTotal(10)
-      .withOnReaperException({ (_: Throwable) => IO.unit })
+      .withOnReaperException((_: Throwable) => IO.unit)
       .build
       .use(k =>
         k.take(1)

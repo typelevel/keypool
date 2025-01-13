@@ -39,7 +39,7 @@ class PoolSpec extends CatsEffectSuite {
       .withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxTotal(10)
-      .withOnReaperException({ (_: Throwable) => IO.unit })
+      .withOnReaperException((_: Throwable) => IO.unit)
       .build
       .use(pool =>
         pool.take
@@ -58,7 +58,7 @@ class PoolSpec extends CatsEffectSuite {
       .withDefaultReuseState(Reusable.DontReuse)
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxTotal(10)
-      .withOnReaperException({ (_: Throwable) => IO.unit })
+      .withOnReaperException((_: Throwable) => IO.unit)
       .build
       .use(pool =>
         pool.take
