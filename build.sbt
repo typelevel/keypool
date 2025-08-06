@@ -25,7 +25,7 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.6").toMap
   )
   .nativeSettings(
-    tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.8").toMap
+    tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.5.0").toMap
   )
   .settings(
     mimaBinaryIssueFilters ++= Seq(
@@ -56,11 +56,11 @@ lazy val docs = project
   .dependsOn(core.jvm)
   .enablePlugins(TypelevelSitePlugin)
 
-val catsV = "2.11.0"
-val catsEffectV = "3.6.3"
+val catsV = "2.13.0"
+val catsEffectV = "3.7.0-RC1"
 
-val munitV = "1.0.0"
-val munitCatsEffectV = "2.1.0"
+val munitV = "1.1.0"
+val munitCatsEffectV = "2.2.0-RC1"
 
 val kindProjectorV = "0.13.3"
 val betterMonadicForV = "0.3.1"
