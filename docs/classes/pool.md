@@ -40,4 +40,11 @@ the `maxPerKey` parameter.
 
 ## Example
 
-TBD
+This example demonstrates how to use `Pool` to manage reusable TCP socket connections to a single
+server node. It constructs a configured `Pool` from a socket `Resource` and runs a `Stream` that
+processes events in parallel using pooled connections.
+
+@:include(examples/pool-example.md)
+
+The implementations of `eventProducer`, `serverQuery`, and `isCorrect` are intentionally omitted
+because they are not relevant to the example.
