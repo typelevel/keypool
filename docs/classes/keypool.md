@@ -38,4 +38,12 @@ The builder also allows to configure the following lifecycle callbacks.
 
 ## Example
 
-TBD
+This example demonstrates how to use `KeyPool` to manage reusable TCP socket connections to a
+cluster of nodes. It constructs a configured `KeyPool` whose keys determine which node each
+connection targets, and runs a `Stream` that processes events in parallel using keyed, pooled
+connections.
+
+@:include(examples/keypool-example.md)
+
+The implementations of `eventProducer`, `serverQuery`, and `isCorrect` are intentionally omitted
+because they are not relevant to the example.
