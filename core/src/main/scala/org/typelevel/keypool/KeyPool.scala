@@ -35,7 +35,7 @@ import org.typelevel.keypool.internal._
  * A background reaper thread is kept alive for the length of the key pool's life.
  *
  * When resources are taken from the pool they are received as a [[Managed]]. This [[Managed]] has a
- * [[Ref]] to a [[Reusable]] which indicates whether the pool can reuse the resource.
+ * `Ref` to a [[Reusable]] which indicates whether the pool can reuse the resource.
  *
  * Unlike [[Pool]], which is a single-key convenience wrapper, `KeyPool` partitions resources by a
  * user-provided key type `A` and enforces per-key limits and accounting.
@@ -377,8 +377,8 @@ object KeyPool {
 
     /**
      * Set the default [[Reusable]] state applied when resources are returned to the pool. This
-     * default can be overridden per-resource via [[Managed.canBeReused]] from [[KeyPool.take]]. If
-     * not configured, the default is [[Reusable.Reuse]].
+     * default can be overridden per-resource via [[Managed.canBeReused]] from
+     * [[KeyPool.take(k:A)* KeyPool.take]]. If not configured, the default is [[Reusable.Reuse]].
      *
      * @param defaultReuseState
      *   whether resources returned to the pool should be reused ([[Reusable.Reuse]]) or destroyed
