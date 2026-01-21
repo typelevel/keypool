@@ -33,7 +33,7 @@ import scala.concurrent.duration._
  * A background reaper thread is kept alive for the length of the pool's life.
  *
  * When resources are taken from the pool they are received as a [[Managed]]. This [[Managed]] has a
- * [[Ref]] to a [[Reusable]] which indicates whether the pool can reuse the resource.
+ * `Ref` to a [[Reusable]] which indicates whether the pool can reuse the resource.
  *
  * `Pool` is a convenience, single-key specialization of [[KeyPool]] that does not partition
  * resources by key and exposes simpler `take`/`state` APIs.
