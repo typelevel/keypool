@@ -59,7 +59,7 @@ lazy val docs = project
 val catsV = "2.13.0"
 val catsEffectV = "3.7.0-RC1"
 
-val munitV = "1.2.2"
+val munitV = "1.2.3"
 val munitCatsEffectV = "2.2.0-RC1"
 
 val kindProjectorV = "0.13.4"
