@@ -22,6 +22,7 @@
 package org.typelevel.keypool.internal
 
 import munit.CatsEffectSuite
+import cats.syntax.all._
 import cats.effect._
 import cats.effect.testkit.TestControl
 import scala.concurrent.duration._
@@ -119,6 +120,30 @@ class RequestSemaphoreSpec extends CatsEffectSuite {
       } yield xs
 
       assertIO(r, List(1, 4, 3, 2))
+    }
+  }
+
+  List(Fifo, Lifo).foreach { fairness =>
+    test(
+      s"$fairness: do not lose a permit when a waiter is cancelled while being handed the permit"
+    ) {
+      val program = for {
+        sem <- RequestSemaphore[IO](fairness, 1)
+        held <- sem.permit.allocated
+        waiter <- sem.permit.surround(IO.unit).start
+        _ <- IO.sleep(1.milli) // the waiter is now queued for the permit
+        // Cancelling only schedules the waiter's cleanup. If `release` dequeues the waiter first,
+        // it hands the permit to a fiber that is already being cancelled and never releases it.
+        _ <- IO.both(held._2, waiter.cancel)
+        _ <- sem.permit.surround(IO.unit) // never completes if the permit was lost
+      } yield ()
+
+      TestControl
+        .executeEmbed(program)
+        .adaptErr { case e: TestControl.NonTerminationException =>
+          new AssertionError(s"permit lost!", e)
+        }
+        .replicateA_(100) // repeat to increase the chance of hitting the race condition
     }
   }
 
