@@ -57,6 +57,9 @@ class TakeCancelSpec extends CatsEffectSuite {
         .withMaxTotal(racers * 2)
         .build
         .use { pool =>
+          // Seed idle resources, then race take against cancellation at varying delays.
+          // Reseed after each burst to keep exercising reuse. A resource lost between removal
+          // and finalizer registration remains allocated but is neither pooled nor destroyed.
           val seed = List.fill(racers)(()).traverse(_ => pool.take(())).use_
 
           def burst(b: Int) = List.range(0, racers).parTraverse_ { i =>
@@ -74,7 +77,7 @@ class TakeCancelSpec extends CatsEffectSuite {
           } yield (a - d - st._1, st._1, st._2.values.sum)
         }
         .timeoutTo(
-          2.minutes,
+          10.seconds,
           IO.raiseError(new AssertionError("timed out, a permit was probably lost"))
         )
     } yield {
