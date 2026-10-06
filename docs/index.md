@@ -1,6 +1,6 @@
 # keypool - A Keyed Pool for Scala
 
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.typelevel/keypool_2.13/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.typelevel/keypool_2.13)
+[![Maven Central](https://img.shields.io/maven-central/v/org.typelevel/keypool_2.13)](https://central.sonatype.com/artifact/org.typelevel/keypool_2.13)
 
 ## Quick Start
 

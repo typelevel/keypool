@@ -21,14 +21,13 @@
 
 package org.typelevel.keypool
 
-import internal.{PoolList, PoolMap}
 import cats._
 import cats.syntax.all._
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.spawn._
-import cats.effect.std.Semaphore
 import scala.concurrent.duration._
 import cats.effect.kernel.Resource.ExitCase
+import org.typelevel.keypool.internal._
 
 @deprecated("use KeyPool.Builder", "0.4.7")
 final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
@@ -90,15 +89,16 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       fa.onError { case e => onReaperException(e) }.attempt >> keepRunning(fa)
     for {
       kpVar <- Resource.makeCase(
-        Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](
-          PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
-        )
+        Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]]))
       )(KeyPool.destroy)
-      kpMaxTotalSem <- Resource.eval(Semaphore[F](kpMaxTotal.toLong))
+      kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fairness.Fifo, kpMaxTotal))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
-          keepRunning(KeyPool.reap(nanos, kpVar, onReaperException)).background.void
+          val durationBetweenEvictionRuns = 5.seconds // the previous default
+          keepRunning(
+            KeyPool.reap(nanos, durationBetweenEvictionRuns, kpVar, onReaperException)
+          ).background.void
         case _ =>
           Applicative[Resource[F, *]].unit
       }

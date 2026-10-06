@@ -1,10 +1,10 @@
 import com.typesafe.tools.mima.core._
 
-val Scala213 = "2.13.13"
-val Scala3 = "3.3.3"
+val Scala213 = "2.13.18"
+val Scala3 = "3.3.8"
 
 ThisBuild / tlBaseVersion := "0.4"
-ThisBuild / crossScalaVersions := Seq("2.12.19", Scala213, Scala3)
+ThisBuild / crossScalaVersions := Seq("2.12.21", Scala213, Scala3)
 ThisBuild / tlVersionIntroduced := Map("3" -> "0.4.3")
 ThisBuild / developers += tlGitHubDev("ChristopherDavenport", "Christopher Davenport")
 ThisBuild / startYear := Some(2019)
@@ -25,7 +25,7 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.6").toMap
   )
   .nativeSettings(
-    tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.4.8").toMap
+    tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "0.5.0").toMap
   )
   .settings(
     mimaBinaryIssueFilters ++= Seq(
@@ -44,7 +44,10 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       ProblemFilters
         .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPoolBuilder.this"),
       ProblemFilters
-        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#Builder.this")
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#Builder.this"),
+      // Introduced by #561, add durationBetweenEvictionRuns
+      ProblemFilters
+        .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.Pool#Builder.this")
     )
   )
 
@@ -54,13 +57,13 @@ lazy val docs = project
   .dependsOn(core.jvm)
   .enablePlugins(TypelevelSitePlugin)
 
-val catsV = "2.10.0"
-val catsEffectV = "3.5.4"
+val catsV = "2.13.0"
+val catsEffectV = "3.7.1"
 
-val munitV = "1.0.0-M11"
-val munitCatsEffectV = "2.0.0-M4"
+val munitV = "1.3.6"
+val munitCatsEffectV = "2.2.1"
 
-val kindProjectorV = "0.13.3"
+val kindProjectorV = "0.13.4"
 val betterMonadicForV = "0.3.1"
 
 // General Settings

@@ -40,7 +40,7 @@ class KeyPoolSpec extends CatsEffectSuite {
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxPerKey(Function.const(10))
       .withMaxTotal(10)
-      .withOnReaperException({ (_: Throwable) => IO.unit })
+      .withOnReaperException((_: Throwable) => IO.unit)
       .build
       .use(k =>
         k.take(1)
@@ -60,7 +60,7 @@ class KeyPoolSpec extends CatsEffectSuite {
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxPerKey(Function.const(10))
       .withMaxTotal(10)
-      .withOnReaperException({ (_: Throwable) => IO.unit })
+      .withOnReaperException((_: Throwable) => IO.unit)
       .build
       .use(k =>
         k.take(1)
@@ -151,6 +151,58 @@ class KeyPoolSpec extends CatsEffectSuite {
       }
   }
 
+  test("Used resource not cleaned up if idle time expired but eviction hasn't run") {
+    KeyPool
+      .Builder(
+        (i: Int) => Ref.of[IO, Int](i),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
+      .withIdleTimeAllowedInPool(5.seconds)
+      .withDurationBetweenEvictionRuns(7.seconds)
+      .withMaxPerKey(Function.const(1))
+      .withMaxTotal(1)
+      .withOnReaperException((_: Throwable) => IO.unit)
+      .build
+      .use { k =>
+        val action = k
+          .take(1)
+          .use(_ => IO.unit)
+        for {
+          _ <- action
+          init <- k.state.map(_._1)
+          _ <- Temporal[IO].sleep(6.seconds)
+          later <- k.state.map(_._1)
+        } yield assert(init === 1 && later === 1)
+      }
+  }
+
+  test("Used resource not cleaned up if idle time expired but eviction is disabled") {
+    KeyPool
+      .Builder(
+        (i: Int) => Ref.of[IO, Int](i),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
+      .withIdleTimeAllowedInPool(5.seconds)
+      .withDurationBetweenEvictionRuns(-1.seconds)
+      .withMaxPerKey(Function.const(1))
+      .withMaxTotal(1)
+      .withOnReaperException((_: Throwable) => IO.unit)
+      .build
+      .use { k =>
+        val action = k
+          .take(1)
+          .use(_ => IO.unit)
+        for {
+          _ <- action
+          init <- k.state.map(_._1)
+          _ <- Temporal[IO].sleep(6.seconds)
+          later <- k.state.map(_._1)
+        } yield assert(init === 1 && later === 1)
+      }
+  }
+
   test("Do not allocate more resources than the maxTotal") {
     val MaxTotal = 10
 
@@ -175,6 +227,65 @@ class KeyPoolSpec extends CatsEffectSuite {
         } yield assert(attempt1.isLeft && attempt2.isRight)
       }
   }
+
+  test("requests served in FIFO order by default") {
+    TestControl.executeEmbed {
+      KeyPool
+        .Builder(
+          (i: Int) => Ref.of[IO, Int](i),
+          nothing
+        )
+        .withMaxTotal(1)
+        .build
+        .use { pool =>
+          for {
+            ref <- IO.ref(List.empty[Int])
+            f1 <- reqAction(pool, ref, 1).start <* IO.sleep(1.milli)
+            f2 <- reqAction(pool, ref, 2).start <* IO.sleep(1.milli)
+            f3 <- reqAction(pool, ref, 3).start <* IO.sleep(1.milli)
+            f4 <- reqAction(pool, ref, 4).start <* IO.sleep(1.milli)
+            _ <- f1.cancel
+            _ <- f2.join *> f3.join *> f4.join
+            order <- ref.get
+          } yield assertEquals(order, List(1, 2, 3, 4))
+        }
+    }
+  }
+
+  test("requests served in LIFO order if fairness is false") {
+    TestControl.executeEmbed {
+      KeyPool
+        .Builder(
+          (i: Int) => Ref.of[IO, Int](i),
+          nothing
+        )
+        .withMaxTotal(1)
+        .withFairness(Fairness.Lifo)
+        .build
+        .use { pool =>
+          for {
+            ref <- IO.ref(List.empty[Int])
+            f1 <- reqAction(pool, ref, 1).start <* IO.sleep(1.milli)
+            f2 <- reqAction(pool, ref, 2).start <* IO.sleep(1.milli)
+            f3 <- reqAction(pool, ref, 3).start <* IO.sleep(1.milli)
+            f4 <- reqAction(pool, ref, 4).start <* IO.sleep(1.milli)
+            _ <- f1.cancel
+            _ <- f2.join *> f3.join *> f4.join
+            order <- ref.get
+          } yield assertEquals(order, List(1, 4, 3, 2))
+        }
+    }
+  }
+
+  private def reqAction(
+      pool: KeyPool[IO, Int, Ref[IO, Int]],
+      ref: Ref[IO, List[Int]],
+      id: Int
+  ) =
+    if (id == 1)
+      pool.take(1).use(_ => ref.update(l => l :+ id) *> IO.never)
+    else
+      pool.take(1).use(_ => ref.update(l => l :+ id))
 
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void

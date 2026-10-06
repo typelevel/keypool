@@ -24,7 +24,9 @@ package org.typelevel.keypool
 import cats.syntax.all._
 import cats.effect._
 import cats.effect.std.CountDownLatch
+import cats.effect.testkit.TestControl
 import scala.concurrent.duration._
+import scala.concurrent.TimeoutException
 import munit.CatsEffectSuite
 
 class PoolSpec extends CatsEffectSuite {
@@ -38,7 +40,7 @@ class PoolSpec extends CatsEffectSuite {
       .withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxTotal(10)
-      .withOnReaperException({ (_: Throwable) => IO.unit })
+      .withOnReaperException((_: Throwable) => IO.unit)
       .build
       .use(pool =>
         pool.take
@@ -57,7 +59,7 @@ class PoolSpec extends CatsEffectSuite {
       .withDefaultReuseState(Reusable.DontReuse)
       .withIdleTimeAllowedInPool(Duration.Inf)
       .withMaxTotal(10)
-      .withOnReaperException({ (_: Throwable) => IO.unit })
+      .withOnReaperException((_: Throwable) => IO.unit)
       .build
       .use(pool =>
         pool.take
@@ -134,6 +136,54 @@ class PoolSpec extends CatsEffectSuite {
       }
   }
 
+  test("Used resource not cleaned up if idle time expired but eviction hasn't run") {
+    Pool
+      .Builder(
+        Ref.of[IO, Int](1),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
+      .withIdleTimeAllowedInPool(5.seconds)
+      .withDurationBetweenEvictionRuns(7.seconds)
+      .withMaxTotal(1)
+      .withOnReaperException((_: Throwable) => IO.unit)
+      .build
+      .use { pool =>
+        val action = pool.take
+          .use(_ => IO.unit)
+        for {
+          _ <- action
+          init <- pool.state
+          _ <- Temporal[IO].sleep(6.seconds)
+          later <- pool.state
+        } yield assert(init.total === 1 && later.total === 1)
+      }
+  }
+
+  test("Used resource not cleaned up if idle time expired but eviction is disabled") {
+    Pool
+      .Builder(
+        Ref.of[IO, Int](1),
+        nothing
+      )
+      .withDefaultReuseState(Reusable.Reuse)
+      .withIdleTimeAllowedInPool(5.seconds)
+      .withDurationBetweenEvictionRuns(-1.seconds)
+      .withMaxTotal(1)
+      .withOnReaperException((_: Throwable) => IO.unit)
+      .build
+      .use { pool =>
+        val action = pool.take
+          .use(_ => IO.unit)
+        for {
+          _ <- action
+          init <- pool.state
+          _ <- Temporal[IO].sleep(6.seconds)
+          later <- pool.state
+        } yield assert(init.total === 1 && later.total === 1)
+      }
+  }
+
   test("Do not allocate more resources than the maxTotal") {
     val MaxTotal = 10
 
@@ -158,6 +208,89 @@ class PoolSpec extends CatsEffectSuite {
         } yield assert(attempt1.isLeft && attempt2.isRight)
       }
   }
+
+  test("requests served in FIFO order by default") {
+    TestControl.executeEmbed {
+      Pool
+        .Builder(
+          Ref.of[IO, Int](1),
+          nothing
+        )
+        .withMaxTotal(1)
+        .build
+        .use { pool =>
+          for {
+            ref <- IO.ref(List.empty[Int])
+            f1 <- reqAction(pool, ref, 1).start <* IO.sleep(1.milli)
+            f2 <- reqAction(pool, ref, 2).start <* IO.sleep(1.milli)
+            f3 <- reqAction(pool, ref, 3).start <* IO.sleep(1.milli)
+            f4 <- reqAction(pool, ref, 4).start <* IO.sleep(1.milli)
+            _ <- f1.cancel
+            _ <- f2.join *> f3.join *> f4.join
+            order <- ref.get
+          } yield assertEquals(order, List(1, 2, 3, 4))
+        }
+    }
+  }
+
+  test("requests served in LIFO order if fairness is false") {
+    TestControl.executeEmbed {
+      Pool
+        .Builder(
+          Ref.of[IO, Int](1),
+          nothing
+        )
+        .withMaxTotal(1)
+        .withFairness(Fairness.Lifo)
+        .build
+        .use { pool =>
+          for {
+            ref <- IO.ref(List.empty[Int])
+            f1 <- reqAction(pool, ref, 1).start <* IO.sleep(1.milli)
+            f2 <- reqAction(pool, ref, 2).start <* IO.sleep(1.milli)
+            f3 <- reqAction(pool, ref, 3).start <* IO.sleep(1.milli)
+            f4 <- reqAction(pool, ref, 4).start <* IO.sleep(1.milli)
+            _ <- f1.cancel
+            _ <- f2.join *> f3.join *> f4.join
+            order <- ref.get
+          } yield assertEquals(order, List(1, 4, 3, 2))
+        }
+    }
+  }
+
+  test("do not lose permits when requests time out while another request releases") {
+    val program = Pool
+      .Builder(Ref.of[IO, Int](1), nothing)
+      .withMaxTotal(1)
+      .build
+      .use { pool =>
+        for {
+          holder <- pool.take.use(_ => IO.sleep(1.second)).start
+          _ <- IO.sleep(1.milli)
+          // These timeouts fire at the same instant the holder releases. A request that is
+          // cancelled while `release` hands it the permit takes the permit down with it.
+          _ <- (1 to 8).toList.parTraverse_(_ => pool.take.use_.timeout(999.millis).attempt)
+          _ <- holder.join
+          // Test whether we can acquire a permit, fail with timeout if we can't (no permits available)
+          _ <- pool.take.use_.timeout(1.minute)
+        } yield ()
+      }
+
+    TestControl
+      .executeEmbed(program)
+      .adaptErr { case e: TimeoutException => new AssertionError(s"permit lost!", e) }
+      .replicateA_(100) // repeat to increase the chance of hitting the race condition
+  }
+
+  private def reqAction(
+      pool: Pool[IO, Ref[IO, Int]],
+      ref: Ref[IO, List[Int]],
+      id: Int
+  ) =
+    if (id == 1)
+      pool.take.use(_ => ref.update(l => l :+ id) *> IO.never)
+    else
+      pool.take.use(_ => ref.update(l => l :+ id))
 
   private def nothing(ref: Ref[IO, Int]): IO[Unit] =
     ref.get.void
