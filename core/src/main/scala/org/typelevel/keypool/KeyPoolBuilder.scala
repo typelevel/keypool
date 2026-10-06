@@ -89,7 +89,9 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       fa.onError { case e => onReaperException(e) }.attempt >> keepRunning(fa)
     for {
       kpVar <- Resource.makeCase(
-        Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]]))
+        Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](
+          PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
+        )
       )(KeyPool.destroy)
       kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fairness.Fifo, kpMaxTotal))
       _ <- idleTimeAllowedInPool match {
