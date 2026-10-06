@@ -311,20 +311,25 @@ object KeyPool {
 
     for {
       _ <- kp.kpMaxTotalSem.permit
-      optR <- Resource.eval(kp.kpVar.modify(go))
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
-      resource <- Resource.makeCaseFull[F, (B, ExitCase => F[Unit])] { poll =>
-        optR.fold(poll(kp.kpRes(k).allocatedCase))(r => Applicative[F].pure(r))
-      } { (resource, exitCase) =>
+      taken <- Resource.makeCaseFull[F, (Boolean, (B, ExitCase => F[Unit]))] { poll =>
+        kp.kpVar.modify(go).flatMap {
+          case Some(r) => Applicative[F].pure((true, r))
+          case None => poll(kp.kpRes(k).allocatedCase).map((false, _))
+        }
+      } { case ((_, (b, destroy)), exitCase) =>
         for {
           reusable <- releasedState.get
           out <- reusable match {
-            case Reusable.Reuse => put(kp, k, resource._1, resource._2).apply(exitCase).attempt.void
-            case Reusable.DontReuse => resource._2(exitCase).attempt.void
+            case Reusable.Reuse => put(kp, k, b, destroy).apply(exitCase).attempt.void
+            case Reusable.DontReuse => destroy(exitCase).attempt.void
           }
         } yield out
       }
-    } yield new Managed(resource._1, optR.isDefined, releasedState)
+    } yield {
+      val (reused, (b, _)) = taken
+      new Managed(b, reused, releasedState)
+    }
   }
 
   final class Builder[F[_]: Temporal, A, B] private[keypool] (
