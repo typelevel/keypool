@@ -24,7 +24,6 @@ package org.typelevel.keypool
 import cats.effect.*
 import cats.effect.testkit.*
 import munit.CatsEffectSuite
-import org.typelevel.keypool.internal.Metrics
 import org.typelevel.keypool.otel4s.Otel4sMetrics
 import org.typelevel.otel4s.{Attribute, Attributes}
 import org.typelevel.otel4s.metrics.{BucketBoundaries, MeterProvider}

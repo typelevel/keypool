@@ -21,7 +21,7 @@
 
 package org.typelevel.keypool
 
-import internal.{Metrics, PoolList, PoolMap}
+import internal.{PoolList, PoolMap}
 import cats._
 import cats.syntax.all._
 import cats.effect.kernel._
@@ -94,7 +94,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
         Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](
           PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
         )
-      )(kpVar => KeyPool.destroy(kpVar, kpMetrics))
+      )((kpVar, exit) => KeyPool.destroy(kpVar, exit, kpMetrics))
       kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fairness.Fifo, kpMaxTotal))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>

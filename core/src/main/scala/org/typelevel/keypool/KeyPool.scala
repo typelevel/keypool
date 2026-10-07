@@ -211,12 +211,13 @@ object KeyPool {
               val (m_, toDestroy) = findStale(now, idleCount, m)
               (
                 m_,
-                // In this context, we're closing the resource due to it not being used for a while - hence a Succeeded exit case.toDestroy
+                // In this context, we're closing the resource due to it not being used for a while - hence a Succeeded exit case.
+                toDestroy
                   .traverse_(r =>
                     metrics.idleDec >>
                       metrics.resourceDestroyed(Metrics.DestructionReason.IdleTimeout) >>
-                      r._2._2
-                  (ExitCase.Succeeded))
+                      r._2._2(ExitCase.Succeeded)
+                  )
                   .attempt
                   .flatMap {
                     case Left(t) => onReaperException(t)
@@ -258,8 +259,8 @@ object KeyPool {
       r: B,
       destroy: ExitCase => F[Unit]
   ): ExitCase => F[Unit] = {
-    def destroyFor(reason: Metrics.DestructionReason): F[Unit] =
-      kp.kpMetrics.resourceDestroyed(reason) >> destroy
+    def destroyFor(reason: Metrics.DestructionReason)(ec: ExitCase): F[Unit] =
+      kp.kpMetrics.resourceDestroyed(reason) >> destroy(ec)
     def addToList[Z](
         now: FiniteDuration,
         maxCount: Int,
@@ -329,18 +330,17 @@ object KeyPool {
           }
       }
 
-    def allocateNew: F[(B, F[Unit])] =
-      kp.kpMetrics.createDuration.surround(kp.kpRes(k).allocated)
+    def allocateNew: F[(B, ExitCase => F[Unit])] =
+      kp.kpMetrics.createDuration.surround(kp.kpRes(k).allocatedCase)
 
     for {
       acquisition <- kp.kpMetrics.acquire
       _ <- kp.kpMaxTotalSem.permit
-      _ <- Resource.eval(kp.kpMetrics.idleDec.whenA(optR.nonEmpty))
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
       taken <- Resource.makeCaseFull[F, (Boolean, (B, ExitCase => F[Unit]))] { poll =>
         kp.kpVar.modify(go).flatMap {
-          case Some(r) => Applicative[F].pure((true, r))
-          case None => poll(allocatedNew).map((false, _))
+          case Some(r) => kp.kpMetrics.idleDec.as((true, r))
+          case None => poll(allocateNew).map((false, _))
         }
       } { case ((_, (b, destroy)), exitCase) =>
         for {
@@ -443,7 +443,7 @@ object KeyPool {
           Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](
             PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
           )
-        )(kpVar => KeyPool.destroy(kpVar, kpMetrics))
+        )((kpVar, exit) => KeyPool.destroy(kpVar, exit, kpMetrics))
         kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](fairness, kpMaxTotal))
         _ <- (idleTimeAllowedInPool, durationBetweenEvictionRuns) match {
           case (fdI: FiniteDuration, fdE: FiniteDuration) if fdE >= 0.seconds =>

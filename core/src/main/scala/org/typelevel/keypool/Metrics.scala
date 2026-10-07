@@ -19,7 +19,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package org.typelevel.keypool.internal
+package org.typelevel.keypool
 
 import cats.Applicative
 import cats.effect.kernel.Resource

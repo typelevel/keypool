@@ -27,7 +27,7 @@ import cats.effect.kernel.{Clock, Ref, Resource, Temporal}
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import cats.syntax.traverse.*
-import org.typelevel.keypool.internal.Metrics
+import org.typelevel.keypool.Metrics
 import org.typelevel.otel4s.{Attribute, Attributes}
 import org.typelevel.otel4s.metrics.{BucketBoundaries, Histogram, MeterProvider}
 

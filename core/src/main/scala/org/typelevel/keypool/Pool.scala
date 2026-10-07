@@ -24,7 +24,6 @@ package org.typelevel.keypool
 import cats._
 import cats.effect.kernel._
 import cats.syntax.all._
-import org.typelevel.keypool.internal.Metrics
 import scala.concurrent.duration._
 
 /**
