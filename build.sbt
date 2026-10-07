@@ -95,7 +95,7 @@ val catsV = "2.13.0"
 val catsEffectV = "3.7.1"
 
 val otel4sV = "1.1.0"
-val otel4sSdkV = "0.19.2"
+val otel4sSdkV = "0.19.4"
 
 val munitV = "1.3.6"
 val munitCatsEffectV = "2.2.1"
