@@ -26,6 +26,7 @@ import cats.effect._
 import cats.effect.std.CountDownLatch
 import cats.effect.testkit.TestControl
 import scala.concurrent.duration._
+import scala.concurrent.TimeoutException
 import munit.CatsEffectSuite
 
 class PoolSpec extends CatsEffectSuite {
@@ -255,6 +256,30 @@ class PoolSpec extends CatsEffectSuite {
           } yield assertEquals(order, List(1, 4, 3, 2))
         }
     }
+  }
+
+  test("do not lose permits when requests time out while another request releases") {
+    val program = Pool
+      .Builder(Ref.of[IO, Int](1), nothing)
+      .withMaxTotal(1)
+      .build
+      .use { pool =>
+        for {
+          holder <- pool.take.use(_ => IO.sleep(1.second)).start
+          _ <- IO.sleep(1.milli)
+          // These timeouts fire at the same instant the holder releases. A request that is
+          // cancelled while `release` hands it the permit takes the permit down with it.
+          _ <- (1 to 8).toList.parTraverse_(_ => pool.take.use_.timeout(999.millis).attempt)
+          _ <- holder.join
+          // Test whether we can acquire a permit, fail with timeout if we can't (no permits available)
+          _ <- pool.take.use_.timeout(1.minute)
+        } yield ()
+      }
+
+    TestControl
+      .executeEmbed(program)
+      .adaptErr { case e: TimeoutException => new AssertionError(s"permit lost!", e) }
+      .replicateA_(100) // repeat to increase the chance of hitting the race condition
   }
 
   private def reqAction(

@@ -43,6 +43,7 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool.destroy"),
       ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool.reap"),
       ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool.put"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("org.typelevel.keypool.KeyPool.put"),
       ProblemFilters
         .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#KeyPoolConcrete.this"),
       ProblemFilters.exclude[DirectMissingMethodProblem](
@@ -97,7 +98,7 @@ val otel4sV = "1.1.0"
 val otel4sSdkV = "0.19.2"
 
 val munitV = "1.3.6"
-val munitCatsEffectV = "2.2.0"
+val munitCatsEffectV = "2.2.1"
 
 val kindProjectorV = "0.13.4"
 val betterMonadicForV = "0.3.1"

@@ -36,7 +36,7 @@ import org.typelevel.keypool.Fairness
  * the order in which requests acquire a permit.
  *
  * Derived from cats-effect MiniSemaphore
- * https://github.com/typelevel/cats-effect/blob/v3.5.4/kernel/shared/src/main/scala/cats/effect/kernel/MiniSemaphore.scala#L29
+ * https://github.com/typelevel/cats-effect/blob/v3.7.1/kernel/shared/src/main/scala/cats/effect/kernel/MiniSemaphore.scala#L29
  */
 private[keypool] abstract class RequestSemaphore[F[_]] {
   def permit: Resource[F, Unit]
@@ -95,10 +95,10 @@ private[keypool] object RequestSemaphore {
     new RequestSemaphore[F] {
       private def acquire: F[Unit] =
         F.deferred[Unit].flatMap { wait =>
-          val cleanup = state.update { case s @ State(waiting, permits) =>
-            if (B.nonEmpty(waiting))
-              State(B.cleanup(waiting, wait), permits)
-            else s
+          val cleanup = state.flatModify { case State(waiting, permits) =>
+            State(B.cleanup(waiting, wait), permits) -> wait.complete(()).flatMap { won =>
+              if (won) F.unit else release
+            }
           }
 
           state.flatModifyFull { case (poll, State(waiting, permits)) =>
@@ -113,7 +113,9 @@ private[keypool] object RequestSemaphore {
         state.flatModify { case State(waiting, permits) =>
           if (B.nonEmpty(waiting)) {
             val (rest, next) = B.take(waiting)
-            State(rest, permits) -> next.complete(()).void
+            State(rest, permits) -> next.complete(()).flatMap { granted =>
+              if (granted) F.unit else release
+            }
           } else
             State(waiting, permits + 1) -> F.unit
         }
