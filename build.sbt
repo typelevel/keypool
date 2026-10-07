@@ -32,6 +32,7 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool.destroy"),
       ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool.reap"),
       ProblemFilters.exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool.put"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("org.typelevel.keypool.KeyPool.put"),
       ProblemFilters
         .exclude[DirectMissingMethodProblem]("org.typelevel.keypool.KeyPool#KeyPoolConcrete.this"),
       ProblemFilters.exclude[DirectMissingMethodProblem](
