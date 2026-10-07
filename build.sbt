@@ -11,7 +11,18 @@ ThisBuild / startYear := Some(2019)
 ThisBuild / licenses := Seq(License.MIT)
 ThisBuild / tlSiteApiUrl := Some(url("https://www.javadoc.io/doc/org.typelevel/keypool_2.12"))
 
-lazy val root = tlCrossRootProject.aggregate(core)
+lazy val root = tlCrossRootProject.aggregate(core, otel4s)
+
+ThisBuild / githubWorkflowBuildMatrixAdditions := {
+  val projects = core.componentProjects ++ otel4s.componentProjects
+
+  Map("project" -> projects.map(_.id).toList)
+}
+
+ThisBuild / githubWorkflowBuildMatrixExclusions ++= {
+  val projects = otel4s.componentProjects.map(_.id)
+  projects.map(project => MatrixExclude(Map("project" -> project, "scala" -> "2.12")))
+}
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -51,14 +62,40 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     )
   )
 
+lazy val otel4s = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
+  .in(file("otel4s"))
+  .dependsOn(core)
+  .enablePlugins(BuildInfoPlugin)
+  .settings(commonSettings)
+  .settings(
+    name := "keypool-otel4s",
+    startYear := Some(2024),
+    crossScalaVersions := Seq(Scala213, Scala3),
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "otel4s-core-metrics"                 % otel4sV,
+      "org.typelevel" %%% "otel4s-semconv-metrics-experimental" % otel4sV    % Test,
+      "org.typelevel" %%% "otel4s-sdk-metrics-testkit"          % otel4sSdkV % Test
+    ),
+    buildInfoPackage := "org.typelevel.keypool.otel4s",
+    buildInfoOptions += sbtbuildinfo.BuildInfoOption.PackagePrivate,
+    buildInfoKeys := Seq[BuildInfoKey](
+      "version" -> version.value
+    ),
+    mimaPreviousArtifacts ~= { _.filterNot(_.revision.startsWith("0.4")) }
+  )
+
 lazy val docs = project
   .in(file("site"))
   .settings(commonSettings)
-  .dependsOn(core.jvm)
+  .dependsOn(core.jvm, otel4s.jvm)
   .enablePlugins(TypelevelSitePlugin)
 
 val catsV = "2.13.0"
 val catsEffectV = "3.7.1"
+
+val otel4sV = "1.1.0"
+val otel4sSdkV = "0.19.2"
 
 val munitV = "1.3.6"
 val munitCatsEffectV = "2.2.1"

@@ -21,6 +21,7 @@
 
 package org.typelevel.keypool
 
+import internal.{PoolList, PoolMap}
 import cats._
 import cats.syntax.all._
 import cats.effect.kernel._
@@ -88,18 +89,19 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
     def keepRunning[Z](fa: F[Z]): F[Z] =
       fa.onError { case e => onReaperException(e) }.attempt >> keepRunning(fa)
     for {
+      kpMetrics <- Resource.pure(Metrics.noop)
       kpVar <- Resource.makeCase(
         Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](
           PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
         )
-      )(KeyPool.destroy)
+      )((kpVar, exit) => KeyPool.destroy(kpVar, exit, kpMetrics))
       kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fairness.Fifo, kpMaxTotal))
       _ <- idleTimeAllowedInPool match {
         case fd: FiniteDuration =>
           val nanos = 0.seconds.max(fd)
           val durationBetweenEvictionRuns = 5.seconds // the previous default
           keepRunning(
-            KeyPool.reap(nanos, durationBetweenEvictionRuns, kpVar, onReaperException)
+            KeyPool.reap(nanos, durationBetweenEvictionRuns, kpVar, kpMetrics, onReaperException)
           ).background.void
         case _ =>
           Applicative[Resource[F, *]].unit
@@ -111,7 +113,8 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpMaxIdle,
       kpMaxTotal,
       kpMaxTotalSem,
-      kpVar
+      kpVar,
+      kpMetrics
     )
   }
 

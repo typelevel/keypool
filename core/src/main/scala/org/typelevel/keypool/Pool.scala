@@ -78,7 +78,8 @@ object Pool {
       val kpMaxIdle: Int,
       val kpMaxTotal: Int,
       val fairness: Fairness,
-      val onReaperException: Throwable => F[Unit]
+      val onReaperException: Throwable => F[Unit],
+      val metricsProvider: Metrics.Provider[F]
   ) {
     private def copy(
         kpRes: Resource[F, B] = this.kpRes,
@@ -88,7 +89,8 @@ object Pool {
         kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
         fairness: Fairness = this.fairness,
-        onReaperException: Throwable => F[Unit] = this.onReaperException
+        onReaperException: Throwable => F[Unit] = this.onReaperException,
+        metricsProvider: Metrics.Provider[F] = this.metricsProvider
     ): Builder[F, B] = new Builder[F, B](
       kpRes,
       kpDefaultReuseState,
@@ -97,7 +99,8 @@ object Pool {
       kpMaxIdle,
       kpMaxTotal,
       fairness,
-      onReaperException
+      onReaperException,
+      metricsProvider
     )
 
     def doOnCreate(f: B => F[Unit]): Builder[F, B] =
@@ -129,6 +132,9 @@ object Pool {
     def withOnReaperException(f: Throwable => F[Unit]): Builder[F, B] =
       copy(onReaperException = f)
 
+    def withMetricsProvider(metricsProvider: Metrics.Provider[F]): Builder[F, B] =
+      copy(metricsProvider = metricsProvider)
+
     private def toKeyPoolBuilder: KeyPool.Builder[F, Unit, B] =
       new KeyPool.Builder(
         kpRes = _ => kpRes,
@@ -139,7 +145,8 @@ object Pool {
         kpMaxIdle = kpMaxIdle,
         kpMaxTotal = kpMaxTotal,
         fairness = fairness,
-        onReaperException = onReaperException
+        onReaperException = onReaperException,
+        metricsProvider = metricsProvider
       )
 
     def build: Resource[F, Pool[F, B]] = {
@@ -163,7 +170,8 @@ object Pool {
       Defaults.maxIdle,
       Defaults.maxTotal,
       Defaults.fairness,
-      Defaults.onReaperException[F]
+      Defaults.onReaperException[F],
+      Defaults.metricsProvider
     )
 
     def apply[F[_]: Temporal, B](
@@ -182,6 +190,7 @@ object Pool {
       def onReaperException[F[_]: Applicative] = { (t: Throwable) =>
         Function.const(Applicative[F].unit)(t)
       }
+      def metricsProvider[F[_]: Applicative]: Metrics.Provider[F] = Metrics.Provider.noop
     }
   }
 }
