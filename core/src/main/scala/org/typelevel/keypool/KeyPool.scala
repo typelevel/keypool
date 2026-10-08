@@ -555,7 +555,7 @@ object KeyPool {
   object Builder {
 
     /**
-     * Create a new `Builder` for a `Pool` from a `Resource` that produces values stored in the
+     * Create a new `Builder` for a `KeyPool` from a `Resource` that produces values stored in the
      * pool.
      */
     def apply[F[_]: Temporal, A, B](
