@@ -209,6 +209,33 @@ class PoolSpec extends CatsEffectSuite {
       }
   }
 
+  test("state reports idle resources only") {
+    TestControl
+      .executeEmbed {
+        Pool
+          .Builder(Resource.unit[IO])
+          .withIdleTimeAllowedInPool(Duration.Inf)
+          .withMaxTotal(3)
+          .build
+          .use { pool =>
+            for {
+              // all three resources are checked out at once
+              checkedOut <- List.fill(3)(pool.take).sequence.use { managed =>
+                pool.state.map(state => (managed.map(_.isReused), state.total))
+              }
+              // all three resources are returned to the pool
+              idle <- pool.state
+            } yield (checkedOut, idle.total)
+          }
+      }
+      .map { case (checkedOut, idle) =>
+        // All three are newly created and checked out, so none is idle.
+        assertEquals(checkedOut, (List.fill(3)(false), 0))
+        // All three are idle once they are returned.
+        assertEquals(idle, 3)
+      }
+  }
+
   test("requests served in FIFO order by default") {
     TestControl.executeEmbed {
       Pool

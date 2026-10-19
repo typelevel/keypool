@@ -6,7 +6,8 @@
 
 **keypool** provides a lightweight keyed resource pool abstraction for controlling concurrent access
 to reusable resources. It limits concurrent acquisitions and reclaims resources to prevent leaks.
-Per-key isolation and deterministic lifecycle semantics enable predictable behavior under load.
+Idle resources are partitioned by key, and deterministic lifecycle semantics enable predictable
+behavior under load.
 
 The library is designed for integration within the [Typelevel][typelevel] ecosystem. It is
 implemented on top of [Cats Effect][cats-effect] type classes using **Polymorphic Effects** (a.k.a.
@@ -18,11 +19,13 @@ The library provides the following primary implementations:
   key. Use it when you need a single shared pool of identical resources, such as a pool of
   connections to a single endpoint when connection partitioning isn't required.
 - [`KeyPool`] – a general-purpose pool that partitions resources by a user-defined key. Use
-  it when you need per-key isolation and limits, for example:
-    - In cluster-based deployments, to prevent one node from starving others by partitioning
-      connections into separate per-node pools.
-    - In multi-tenant systems, to limit how many database connections or active API sessions each
-      tenant can use.
+  it when idle resources must not be shared across keys, for example:
+    - In cluster-based deployments, to keep a separate set of reusable connections per node, so
+      that a request for a node always reuses a connection to that node.
+    - In multi-tenant systems, to keep reusable connections partitioned per tenant (for example,
+      when each tenant has its own credentials). **Note**: the pool does not limit how many
+      connections each tenant can have checked out at once; apply such a limit in the application
+      if you need one.
 
 ## Quick Start
 

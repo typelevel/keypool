@@ -9,7 +9,7 @@ configuration of creation/destruction callbacks, reuse policy, eviction timing, 
 and [fairness][Fairness].
 
 See also [`KeyPool`] – a full-featured multi-key generalization that partitions resources by a user
-provided key type and exposes per-key limits and accounting.
+provided key type and limits idle resources per key.
 
 ## Pool.Builder
 
@@ -44,7 +44,7 @@ This example demonstrates how to use `Pool` to manage reusable TCP socket connec
 server node. It constructs a configured `Pool` from a socket `Resource` and runs a `Stream` that
 processes events in parallel using pooled connections.
 
-@:include(examples/pool-example.md)
+@:include (examples/pool-example.md)
 
 The implementations of `eventProducer`, `serverQuery`, and `isCorrect` are intentionally omitted
 because they are not relevant to the example.

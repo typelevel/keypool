@@ -1,12 +1,12 @@
 # KeyPool
 
 `KeyPool` manages reusable resources partitioned by a user-provided key of arbitrary type. It allows
-to enforce both per-key and global limits on idle and total resources. It hands out resources as
-[`Managed`] values which include a per-resource [`Reusable`] flag so callers can indicate whether
-the value should be returned to the pool or destroyed. A background reaper evicts idle resources
-after a configurable timeout. `KeyPool` instances are constructed with [KeyPool.Builder] that allows
-to configure creation/destruction callbacks, reuse policy, eviction timing, limits,
-and [fairness][Fairness].
+to enforce a per-key limit on idle resources and global limits on idle and checked-out resources.
+It hands out resources as [`Managed`] values which include a per-resource [`Reusable`] flag so
+callers can indicate whether the value should be returned to the pool or destroyed. A background
+reaper evicts idle resources after a configurable timeout. `KeyPool` instances are constructed
+with [KeyPool.Builder] that allows to configure creation/destruction callbacks, reuse policy,
+eviction timing, limits, and [fairness][Fairness].
 
 See also [`Pool`] – a convenience, single-key specialization of `KeyPool` that does not
 partition resources by key and exposes simpler APIs.
@@ -43,7 +43,7 @@ cluster of nodes. It constructs a configured `KeyPool` whose keys determine whic
 connection targets, and runs a `Stream` that processes events in parallel using keyed, pooled
 connections.
 
-@:include(examples/keypool-example.md)
+@:include (examples/keypool-example.md)
 
 The implementations of `eventProducer`, `serverQuery`, and `isCorrect` are intentionally omitted
 because they are not relevant to the example.

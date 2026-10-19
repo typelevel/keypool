@@ -52,7 +52,8 @@ trait Pool[F[_], B] {
   def take: Resource[F, Managed[F, B]]
 
   /**
-   * The current state of the pool.
+   * The current state of the pool: the number of idle resources, wrapped in [[PoolStats]].
+   * Resources that are currently checked out are not included.
    */
   def state: F[PoolStats]
 }

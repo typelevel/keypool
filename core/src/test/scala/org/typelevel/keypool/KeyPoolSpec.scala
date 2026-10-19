@@ -228,6 +228,40 @@ class KeyPoolSpec extends CatsEffectSuite {
       }
   }
 
+  test("maxPerKey limits idle resources only") {
+    TestControl
+      .executeEmbed {
+        KeyPool
+          .Builder((_: String) => Resource.unit[IO])
+          .withIdleTimeAllowedInPool(Duration.Inf)
+          .withMaxPerKey(Function.const(2))
+          .withMaxTotal(10)
+          .build
+          .use { pool =>
+            // "A" is checked out once, "B" twice, "C" three times and "D" four times
+            val keys = "A" :: List.fill(2)("B") ::: List.fill(3)("C") ::: List.fill(4)("D")
+
+            for {
+              // maxPerKey does not limit checked-out resources: all ten are taken at once, including
+              // three for "C" and four for "D" (otherwise the last take would block and TestControl
+              // would report a deadlock)
+              checkedOut <- keys.traverse(pool.take).use { managed =>
+                pool.state.map(state => (managed.map(_.isReused), state))
+              }
+              // maxPerKey limits idle resources: "C" and "D" keep only two resources each once they
+              // are returned
+              idle <- pool.state
+            } yield (checkedOut, idle)
+          }
+      }
+      .map { case (checkedOut, idle) =>
+        // All ten are newly created and checked out, so none is idle (`state` counts idle ones only).
+        assertEquals(checkedOut, (List.fill(10)(false), (0, Map.empty[String, Int])))
+        // Seven of the ten returned resources stay idle: "C" and "D" are capped at two by `maxPerKey`.
+        assertEquals(idle, (7, Map("A" -> 1, "B" -> 2, "C" -> 2, "D" -> 2)))
+      }
+  }
+
   test("requests served in FIFO order by default") {
     TestControl.executeEmbed {
       KeyPool

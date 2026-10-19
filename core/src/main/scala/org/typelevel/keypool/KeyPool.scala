@@ -39,7 +39,8 @@ import cats.effect.kernel.Resource.ExitCase
  * `Ref` to a [[Reusable]] which indicates whether the pool can reuse the resource.
  *
  * Unlike [[Pool]], which is a single-key convenience wrapper, `KeyPool` partitions resources by a
- * user-provided key type `A` and enforces per-key limits and accounting.
+ * user-provided key type `A` and limits idle resources per key. Checked-out resources are limited
+ * only globally.
  *
  * @see
  *   [[Pool]]
@@ -56,10 +57,11 @@ trait KeyPool[F[_], A, B] {
   def take(k: A): Resource[F, Managed[F, B]]
 
   /**
-   * The current state of the pool.
+   * The current number of idle resources in the pool.
    *
-   * The left value is the total number of resources currently in the pool, and the right is a map
-   * of how many resources exist for each key.
+   * The left value is the total number of idle resources across all keys, and the right is a map
+   * from each key to its number of idle resources (keys without idle resources are absent).
+   * Resources that are currently checked out with `take` are not included.
    */
   def state: F[(Int, Map[A, Int])]
 }
