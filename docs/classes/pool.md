@@ -25,7 +25,7 @@ The table below enumerates all the available configuration parameters.
 | `fairness`                    | [`Fairness`]   | `Fairness.Fifo`  | Fairness policy for acquiring permits from the global semaphore.                                                                                                                                         |
 | `idleTimeAllowedInPool`       | `Duration`     | 30 seconds       | How long an idle resource is allowed to remain in the pool before the reaper considers it for eviction.                                                                                                  |
 | `maxIdle`                     | `Int`          | 100              | Cap on the idle resources.                                                                                                                                                                               |
-| `maxTotal`                    | `Int`          | 100              | Global limit on the total number of concurrent resources the pool will hold.                                                                                                                             |
+| `maxTotal`                    | `Int`          | 100              | Limit on the resources checked out at the same time; idle ones are reused first, so the pool never holds more than this.                                                                                 |
 
 The builder also allows to configure the following lifecycle callbacks.
 

@@ -21,13 +21,13 @@
 
 package org.typelevel.keypool
 
-import cats.syntax.all._
-import cats.effect._
-import cats.effect.std.CountDownLatch
+import cats.effect.*
 import cats.effect.testkit.TestControl
-
-import scala.concurrent.duration._
+import cats.syntax.all.*
 import munit.CatsEffectSuite
+
+import scala.concurrent.TimeoutException
+import scala.concurrent.duration.*
 
 class KeyPoolSpec extends CatsEffectSuite {
   test("Keep Resources marked to be kept") {
@@ -203,28 +203,52 @@ class KeyPoolSpec extends CatsEffectSuite {
       }
   }
 
-  test("Do not allocate more resources than the maxTotal") {
-    val MaxTotal = 10
+  test("maxTotal limits checked-out resources but not idle ones") {
+    val MaxTotal = 17
+    val CountB = 11 // should be less than MaxTotal
+    val MaxIdle = MaxTotal + CountB // should be greater than MaxTotal
+    val CheckOutTimeout = 5.second
 
-    KeyPool
-      .Builder(
-        (i: Int) => Ref.of[IO, Int](i),
-        nothing
-      )
-      .withMaxTotal(MaxTotal)
-      .build
-      .use { pool =>
-        for {
-          cdl <- CountDownLatch[IO](MaxTotal)
-          allocated <- IO.parReplicateAN(MaxTotal)(
-            MaxTotal,
-            pool.take(1).use(_ => cdl.release >> IO.never).start
-          )
-          _ <- cdl.await // make sure the pool is exhausted
-          attempt1 <- pool.take(1).use_.timeout(100.millis).attempt
-          _ <- allocated.traverse(_.cancel)
-          attempt2 <- pool.take(1).use_.timeout(100.millis).attempt
-        } yield assert(attempt1.isLeft && attempt2.isRight)
+    TestControl
+      .executeEmbed {
+        KeyPool
+          .Builder((_: String) => Resource.unit[IO])
+          .withMaxTotal(MaxTotal)
+          .withMaxIdle(MaxIdle)
+          .withIdleTimeAllowedInPool(Duration.Inf)
+          .build
+          .use { pool =>
+            for {
+              // all MaxTotal resources are checked out at once, so the pool is exhausted
+              exhausted <- pool.take("A").replicateA(MaxTotal).use { _ =>
+                for {
+                  failedAttempt <- pool.take("A").use_.timeout(CheckOutTimeout).attempt
+                  state <- pool.state // no idle resources at this point - checked out only
+                } yield (failedAttempt, state)
+              }
+              state2 <- pool.state // all returned resources become idle
+              // would deadlock if the permits were not released by the previous step
+              state3 <- pool.take("B").replicateA(CountB).use { _ =>
+                // idle resources of "A" can't be reused for "B"
+                pool.state // "A" resources are still idle, "B" ones are checked out
+              }
+              state4 <- pool.state // idle resources of both keys together exceed MaxTotal
+            } yield (exhausted, state2, state3, state4)
+          }
+      }
+      .map { case ((failedAttempt, state1), state2, state3, state4) =>
+        assertMatches(failedAttempt) { case Left(ex: TimeoutException) =>
+          ex.getMessage == CheckOutTimeout.toString()
+        }
+        // state1 shows no idle resources
+        assertEquals(state1, (0, Map.empty[String, Int]))
+        // state2 shows all MaxTotal resources of "A" idle
+        assertEquals(state2, (MaxTotal, Map("A" -> MaxTotal)))
+        // state3 shows that only the idle resources of "A" are counted
+        assertEquals(state3, (MaxTotal, Map("A" -> MaxTotal)))
+        // state4 shows MaxTotal idle resources of "A" plus CountB of "B": idle resources are not
+        // limited by MaxTotal
+        assertEquals(state4, (MaxTotal + CountB, Map("A" -> MaxTotal, "B" -> CountB)))
       }
   }
 

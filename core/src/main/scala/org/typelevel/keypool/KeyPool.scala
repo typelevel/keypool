@@ -483,11 +483,13 @@ object KeyPool {
       copy(kpMaxIdle = maxIdle)
 
     /**
-     * Set the maximum total number of concurrent resources permitted by the pool. If not
-     * configured, the builder defaults to 100.
+     * Set the maximum number of resources that can be checked out at the same time, across all
+     * keys. Idle resources do not count against this limit (see [[withMaxIdle]]), so the pool can
+     * hold up to `maxTotal + maxIdle` resources overall. If not configured, the builder defaults to
+     * 100.
      *
      * @param total
-     *   maximum total resources.
+     *   maximum number of resources checked out concurrently across all keys.
      */
     def withMaxTotal(total: Int): Builder[F, A, B] =
       copy(kpMaxTotal = total)

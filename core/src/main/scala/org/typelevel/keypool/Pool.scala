@@ -166,8 +166,9 @@ object Pool {
       copy(durationBetweenEvictionRuns = duration)
 
     /**
-     * Set the maximum number of idle resources allowed across the pool. If not configured, the
-     * builder defaults to 100.
+     * Set the maximum number of idle resources allowed across the pool. Values above the limit set
+     * by [[withMaxTotal]] make no difference, because the pool never holds more than that many
+     * resources overall. If not configured, the builder defaults to 100.
      *
      * @param maxIdle
      *   maximum idle resources in the pool.
@@ -176,11 +177,12 @@ object Pool {
       copy(kpMaxIdle = maxIdle)
 
     /**
-     * Set the maximum total number of concurrent resources permitted by the pool. If not
-     * configured, the builder defaults to 100.
+     * Set the maximum number of resources that can be checked out at the same time. Idle resources
+     * are reused before new ones are created, so the pool never holds more than `maxTotal`
+     * resources overall. If not configured, the builder defaults to 100.
      *
      * @param total
-     *   maximum total resources.
+     *   maximum number of resources checked out concurrently.
      */
     def withMaxTotal(total: Int): Builder[F, B] =
       copy(kpMaxTotal = total)

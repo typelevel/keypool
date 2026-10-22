@@ -26,7 +26,7 @@ The table below enumerates all the available configuration parameters.
 | `idleTimeAllowedInPool`       | `Duration`     | 30 seconds       | How long an idle resource is allowed to remain in the pool before the reaper considers it for eviction.                                                                                                  |
 | `maxIdle`                     | `Int`          | 100              | Cap on the idle resources tracked across all keys.                                                                                                                                                       |
 | `maxPerKey`                   | `A => Int`     | 100              | Maximum number of idle resources kept per key `A`. **Note**: it only limits idle resources per key; it does not limit how many resources can be checked out concurrently.                                |
-| `maxTotal`                    | `Int`          | 100              | Global limit on the total number of concurrent resources the pool will hold.                                                                                                                             |
+| `maxTotal`                    | `Int`          | 100              | Global limit on the resources checked out at the same time across all keys; idle ones do not count, so up to `maxTotal + maxIdle` can exist.                                                             |
 
 The builder also allows to configure the following lifecycle callbacks.
 
