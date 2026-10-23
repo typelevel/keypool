@@ -9,39 +9,44 @@ import org.typelevel.keypool.*
 import scala.concurrent.duration.*
 
 // Runs the program on the given cluster.
-def program[F[_]: {Temporal, Network}](
+def program[F[_]: Temporal: Network](
     cluster: NonEmptyVector[SocketAddress[Host]]
 ): F[Unit] =
   KeyPool
     // Creates a keyed pool that manages TCP connections to cluster nodes.
-    .Builder: (key: Int) =>
+    .Builder { (key: Int) =>
       // Creates a socket connection to one of the cluster nodes.
-      // Assumes that `0 < key && key < cluster.length` (see below).
+      // Assumes that `0 <= key && key < cluster.length` (see below).
       Network[F].client(cluster.getUnsafe(key))
-    .withMaxTotal(20)                     // configures `maxTotal`
-    .withMaxIdle(15)                      // configures `maxIdle`
-    .withMaxPerKey(Function.const(10))    // configures `maxPerKey`
+    }
+    .withMaxTotal(20) // configures `maxTotal`
+    .withMaxIdle(15) // configures `maxIdle`
+    .withMaxPerKey(Function.const(10)) // configures `maxPerKey`
     .withIdleTimeAllowedInPool(5.seconds) // configures `idleTimeAllowedInPool`.
     .build
-    .use: pool =>
+    .use { pool =>
       eventProducer
         // Processes events in parallel using pooled connections.
-        .parEvalMapUnordered(10): req =>
+        .parEvalMapUnordered(10) { req =>
           // Computes the key so that each request is dispatched to a specific
-          // cluster node based on up to the first 3 characters of the request.
-          val key = req.take(3).hash % cluster.length
+          // cluster node based on up to the first 5 characters of the request.
+          val key = Math.floorMod(req.take(5).hash, cluster.length)
           // Takes a connection from the pool.
           pool
             .take(key)
-            .use: managed =>
+            .use { managed =>
               // Uses the connection to send a query to the server.
-              serverQuery(managed.value, req).flatMap: res =>
+              serverQuery(managed.value, req).flatMap { res =>
                 // Marks the connection as non‑reusable if the response is incorrect.
                 managed.canBeReused
                   .set(Reusable.DontReuse)
                   .unlessA(isCorrect(res))
+              }
+            }
+        }
         .compile
         .drain
+    }
 
 // Produces a stream of events.
 def eventProducer[F[_]]: Stream[F, String] = ???
