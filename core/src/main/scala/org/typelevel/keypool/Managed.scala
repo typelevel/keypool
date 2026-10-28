@@ -29,6 +29,22 @@ import cats.effect.kernel._
  *
  * This knows whether it was reused or not, and has a reference that when it leaves the controlling
  * scope will dictate whether it is shutdown or returned to the pool.
+ *
+ * @param value
+ *   the underlying resource held by this `Managed` instance.
+ * @param isReused
+ *   indicates whether the resource was taken from the pool (`true`) or newly created (`false`).
+ * @param canBeReused
+ *   A mutable reference controlling reuse: when the `Managed` is released this `Ref` determines
+ *   whether the resource is returned to the pool or shut down.
+ *
+ * @note
+ *   If the caller does not modify `canBeReused` on the returned `Managed`, the pool's default reuse
+ *   state (configured via [[KeyPool.Builder.withDefaultReuseState]]) will be used when the resource
+ *   is released.
+ *
+ * @see
+ *   [[Reusable]]
  */
 final class Managed[F[_], A] private[keypool] (
     val value: A,
