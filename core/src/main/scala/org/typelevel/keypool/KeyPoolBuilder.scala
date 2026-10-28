@@ -92,7 +92,7 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpMetrics <- Resource.pure(Metrics.noop)
       kpVar <- Resource.makeCase(
         Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](
-          PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
+          PoolMap.open(0, Map.empty, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
         )
       )((kpVar, exit) => KeyPool.destroy(kpVar, exit, kpMetrics))
       kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fairness.Fifo, kpMaxTotal))
