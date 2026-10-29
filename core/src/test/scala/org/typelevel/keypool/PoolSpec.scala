@@ -168,7 +168,7 @@ class PoolSpec extends CatsEffectSuite {
       )
       .withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(5.seconds)
-      .withDurationBetweenEvictionRuns(-1.seconds)
+      .withDurationBetweenEvictionRuns((-1).seconds)
       .withMaxTotal(1)
       .withOnReaperException((_: Throwable) => IO.unit)
       .build
