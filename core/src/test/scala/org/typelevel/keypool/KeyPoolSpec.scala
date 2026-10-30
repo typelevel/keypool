@@ -185,7 +185,7 @@ class KeyPoolSpec extends CatsEffectSuite {
       )
       .withDefaultReuseState(Reusable.Reuse)
       .withIdleTimeAllowedInPool(5.seconds)
-      .withDurationBetweenEvictionRuns(-1.seconds)
+      .withDurationBetweenEvictionRuns((-1).seconds)
       .withMaxPerKey(Function.const(1))
       .withMaxTotal(1)
       .withOnReaperException((_: Throwable) => IO.unit)
