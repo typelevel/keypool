@@ -21,6 +21,13 @@
 
 package org.typelevel.keypool
 
+/**
+ * A snapshot of the state of a [[Pool]].
+ *
+ * @param total
+ *   the number of idle resources currently held by the pool. Resources that are currently checked
+ *   out are not counted.
+ */
 final class PoolStats private[keypool] (
     val total: Int
 )
