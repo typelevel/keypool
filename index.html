@@ -100,6 +100,10 @@
 
   <ul class="nav-list">
     <li class="level1 active nav-leaf"><a href="#">keypool - A Keyed Pool for Scala</a></li>
+    <li class="level1 nav-header">classes</li>
+    <li class="level2 nav-leaf"><a href="classes/pool.html">Pool</a></li>
+    <li class="level2 nav-leaf"><a href="classes/keypool.html">KeyPool</a></li>
+    <li class="level2 nav-leaf"><a href="classes/misc.html">Miscellaneous</a></li>
   </ul>
 
 </nav>
@@ -111,6 +115,7 @@
   <p class="header"><a href="#">keypool - A Keyed Pool for Scala</a></p>
 
   <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#overview">Overview</a></li>
     <li class="level1 nav-leaf"><a href="#quick-start">Quick Start</a></li>
   </ul>
 
@@ -123,12 +128,39 @@
         <h1 id="keypool-a-keyed-pool-for-scala" class="title">keypool - A Keyed Pool for Scala</h1>
         <p><a href="https://central.sonatype.com/artifact/org.typelevel/keypool_2.13"><img src="https://img.shields.io/maven-central/v/org.typelevel/keypool_2.13" alt="Maven Central"></a></p>
         
+        <h2 id="overview" class="section"><a class="anchor-link left" href="#overview"><i class="icofont-laika link">&#xef71;</i></a>Overview</h2>
+        <p><strong>keypool</strong> provides a lightweight keyed resource pool abstraction for controlling concurrent access
+        to reusable resources. It limits concurrent acquisitions and reclaims resources to prevent leaks.
+        Idle resources are partitioned by key, and deterministic lifecycle semantics enable predictable
+        behavior under load.</p>
+        <p>The library is designed for integration within the <a href="https://typelevel.org">Typelevel</a> ecosystem. It is
+        implemented on top of <a href="https://typelevel.org/cats-effect/">Cats Effect</a> type classes using <strong>Polymorphic Effects</strong> (a.k.a.
+        <strong>Tagless Final</strong>).</p>
+        <p>The library provides the following primary implementations:</p>
+        <ul>
+          <li><a href="classes/pool.html#pool"><code>Pool</code></a> – a simple specialization that manages reusable resources without partitioning by
+          key. Use it when you need a single shared pool of identical resources, such as a pool of
+          connections to a single endpoint when connection partitioning isn&#39;t required.</li>
+          <li>
+            <a href="classes/keypool.html#keypool"><code>KeyPool</code></a> – a general-purpose pool that partitions resources by a user-defined key. Use
+            it when idle resources must not be shared across keys, for example:
+            <ul>
+              <li>In cluster-based deployments, to keep a separate set of reusable connections per node, so
+              that a request for a node always reuses a connection to that node.</li>
+              <li>In multi-tenant systems, to keep reusable connections partitioned per tenant (for example,
+              when each tenant has its own credentials). <strong>Note</strong>: the pool does not limit how many
+              connections each tenant can have checked out at once; apply such a limit in the application
+              if you need one.</li>
+            </ul>
+          </li>
+        </ul>
+        
         <h2 id="quick-start" class="section"><a class="anchor-link left" href="#quick-start"><i class="icofont-laika link">&#xef71;</i></a>Quick Start</h2>
-        <p>To use keypool in an existing SBT project with Scala 2.12 or a later version, add the following dependencies to your
-        <code>build.sbt</code> depending on your needs:</p>
-        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="identifier">libraryDependencies</span><span> ++= </span><span class="type-name">Seq</span><span>(
-  </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;keypool&quot;</span><span> % </span><span class="string-literal">&quot;0.4.11&quot;</span><span>
-)</span></code></pre>
+        <p>To use <strong>keypool</strong> in an existing SBT project with Scala 2.12 or a later version, add the following
+        dependencies to your <code>build.sbt</code> depending on your needs:</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;org.typelevel&quot;</span><span> %% </span><span class="string-literal">&quot;keypool&quot;</span><span> % </span><span class="string-literal">&quot;0.4.11&quot;</span></code></pre>
+        <p><strong>keypool</strong> is cross-built with Scala versions 2.12, 2.13 and 3.3 for <strong>JVM</strong>, <strong>Scala.js</strong> and
+        <strong>Scala Native</strong>.</p>
 
         
 <hr class="footer-rule"/>
