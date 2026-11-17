@@ -33,12 +33,18 @@ import cats.effect.kernel.Resource.ExitCase
  * This pools internal guarantees are that the max number of values are in the pool at any time, not
  * maximum number of operations. To do the latter application level bounds should be used.
  *
- * A background reaper thread is kept alive for the length of the key pools life.
+ * A background reaper thread is kept alive for the length of the key pool's life.
  *
  * When resources are taken from the pool they are received as a [[Managed]]. This [[Managed]] has a
- * Ref to a [[Reusable]] which indicates whether or not the pool can reuse the resource.
+ * `Ref` to a [[Reusable]] which indicates whether the pool can reuse the resource.
+ *
+ * Unlike [[Pool]], which is a single-key convenience wrapper, `KeyPool` partitions resources by a
+ * user-provided key type `A` and limits idle resources per key. Checked-out resources are limited
+ * only globally.
+ *
+ * @see
+ *   [[Pool]]
  */
-
 trait KeyPool[F[_], A, B] {
 
   /**
@@ -51,10 +57,11 @@ trait KeyPool[F[_], A, B] {
   def take(k: A): Resource[F, Managed[F, B]]
 
   /**
-   * The current state of the pool.
+   * The current number of idle resources in the pool.
    *
-   * The left value is the total number of resources currently in the pool, and the right is a map
-   * of how many resources exist for each key.
+   * The left value is the total number of idle resources across all keys, and the right is a map
+   * from each key to its number of idle resources (keys without idle resources are absent).
+   * Resources that are currently checked out with `take` are not included.
    */
   def state: F[(Int, Map[A, Int])]
 }
@@ -399,41 +406,122 @@ object KeyPool {
       metricsProvider
     )
 
+    /**
+     * Register a callback `f` to run after a new [[Managed]] item is created. Any error raised by
+     * the callback is ignored, and the created item is returned unchanged.
+     *
+     * @note
+     *   If multiple callbacks are registered, their execution order is not guaranteed and callers
+     *   should not rely on any particular ordering.
+     */
     def doOnCreate(f: B => F[Unit]): Builder[F, A, B] =
-      copy(kpRes = { (k: A) => this.kpRes(k).flatMap(v => Resource.eval(f(v).attempt.void.as(v))) })
+      copy(kpRes = { (k: A) => this.kpRes(k).flatMap(v => Resource.eval(f(v).voidError.as(v))) })
 
+    /**
+     * Register a callback `f` to run when a [[Managed]] item is about to be destroyed. Any error
+     * raised by the callback is ignored, and the item will be destroyed regardless.
+     *
+     * @note
+     *   If multiple callbacks are registered, their execution order is not guaranteed and callers
+     *   should not rely on any particular ordering.
+     */
     def doOnDestroy(f: B => F[Unit]): Builder[F, A, B] =
       copy(kpRes = { (k: A) =>
-        this.kpRes(k).flatMap(v => Resource.make(Applicative[F].unit)(_ => f(v).attempt.void).as(v))
+        this.kpRes(k).flatMap(v => Resource.make(Applicative[F].unit)(_ => f(v).voidError).as(v))
       })
 
+    /**
+     * Set the default [[Reusable]] state applied when resources are returned to the pool. This
+     * default can be overridden per-resource via [[Managed.canBeReused]] from
+     * [[KeyPool.take(k:A)* KeyPool.take]]. If not configured, the default is [[Reusable.Reuse]].
+     *
+     * @param defaultReuseState
+     *   whether resources returned to the pool should be reused ([[Reusable.Reuse]]) or destroyed
+     *   ([[Reusable.DontReuse]]) by default.
+     */
     def withDefaultReuseState(defaultReuseState: Reusable): Builder[F, A, B] =
       copy(kpDefaultReuseState = defaultReuseState)
 
+    /**
+     * Set how long an idle resource is allowed to remain in the pool before it becomes eligible for
+     * eviction. If not configured, the builder defaults to 30 seconds.
+     *
+     * @param duration
+     *   maximum idle time allowed in the pool.
+     */
     def withIdleTimeAllowedInPool(duration: Duration): Builder[F, A, B] =
       copy(idleTimeAllowedInPool = duration)
 
+    /**
+     * Set the interval between eviction runs of the pool reaper. If not configured, the builder
+     * defaults to 5 seconds.
+     *
+     * @param duration
+     *   time between successive eviction runs.
+     */
     def withDurationBetweenEvictionRuns(duration: Duration): Builder[F, A, B] =
       copy(durationBetweenEvictionRuns = duration)
 
+    /**
+     * Set the maximum number of idle resources allowed per key. If not configured, the builder
+     * defaults to 100.
+     *
+     * @param f
+     *   function returning max idle count for a given key.
+     */
     def withMaxPerKey(f: A => Int): Builder[F, A, B] =
       copy(kpMaxPerKey = f)
 
+    /**
+     * Set the maximum number of idle resources allowed across all keys. If not configured, the
+     * builder defaults to 100.
+     *
+     * @param maxIdle
+     *   maximum idle resources in the pool.
+     */
     def withMaxIdle(maxIdle: Int): Builder[F, A, B] =
       copy(kpMaxIdle = maxIdle)
 
+    /**
+     * Set the maximum number of resources that can be checked out at the same time, across all
+     * keys. Idle resources do not count against this limit (see [[withMaxIdle]]), so the pool can
+     * hold up to `maxTotal + maxIdle` resources overall. If not configured, the builder defaults to
+     * 100.
+     *
+     * @param total
+     *   maximum number of resources checked out concurrently across all keys.
+     */
     def withMaxTotal(total: Int): Builder[F, A, B] =
       copy(kpMaxTotal = total)
 
+    /**
+     * Set the [[Fairness]] policy for acquiring permits from the global semaphore controlling total
+     * resources. If not configured, the builder defaults to [[Fairness.Fifo]].
+     *
+     * @param fairness
+     *   fairness policy - [[Fairness.Fifo]] or [[Fairness.Lifo]].
+     */
     def withFairness(fairness: Fairness): Builder[F, A, B] =
       copy(fairness = fairness)
 
+    /**
+     * Register a handler `f` invoked for any `Throwable` observed by the background reaper; it runs
+     * when the reaper loop reports an error.
+     *
+     * The provided function is invoked with any `Throwable` observed in the reaper loop. If the
+     * handler itself fails, that failure is swallowed and thereby ignored - the reaper will
+     * continue running and may invoke the handler again for subsequent errors.
+     */
     def withOnReaperException(f: Throwable => F[Unit]): Builder[F, A, B] =
       copy(onReaperException = f)
 
     def withMetricsProvider(metricsProvider: Metrics.Provider[F]): Builder[F, A, B] =
       copy(metricsProvider = metricsProvider)
 
+    /**
+     * Create a `KeyPool` wrapped in a `Resource`, initializing pool internals from the configured
+     * builder parameters and defaults.
+     */
     def build: Resource[F, KeyPool[F, A, B]] = {
       def keepRunning[Z](fa: F[Z]): F[Z] =
         fa.onError { case e => onReaperException(e) }.attempt >> keepRunning(fa)
@@ -469,6 +557,11 @@ object KeyPool {
   }
 
   object Builder {
+
+    /**
+     * Create a new `Builder` for a `KeyPool` from a `Resource` that produces values stored in the
+     * pool.
+     */
     def apply[F[_]: Temporal, A, B](
         res: A => Resource[F, B]
     ): Builder[F, A, B] = new Builder[F, A, B](
@@ -484,6 +577,10 @@ object KeyPool {
       Defaults.metricsProvider
     )
 
+    /**
+     * Convenience constructor that accepts `create` and `destroy` functions and builds a `Resource`
+     * internally.
+     */
     def apply[F[_]: Temporal, A, B](
         create: A => F[B],
         destroy: B => F[Unit]
