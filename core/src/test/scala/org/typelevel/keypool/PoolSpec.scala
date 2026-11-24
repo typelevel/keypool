@@ -333,6 +333,21 @@ class PoolSpec extends CatsEffectSuite {
       .replicateA_(100) // repeat to increase the chance of hitting the race condition
   }
 
+  test("Non-positive maximum lifetime disables reuse") {
+    TestControl.executeEmbed {
+      List(Duration.Zero, (-1).second).traverse_ { lifetime =>
+        Pool
+          .Builder(Resource.unit[IO])
+          .withMaxLifetime(lifetime)
+          .withDurationBetweenEvictionRuns(Duration.Inf)
+          .build
+          .use { pool =>
+            pool.take.use_ >> pool.take.use(m => IO(assert(!m.isReused)))
+          }
+      }
+    }
+  }
+
   private def reqAction(
       pool: Pool[IO, Ref[IO, Int]],
       ref: Ref[IO, List[Int]],

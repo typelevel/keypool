@@ -24,9 +24,12 @@ The table below enumerates all the available configuration parameters.
 | `durationBetweenEvictionRuns` | `Duration`     | 5 seconds        | Interval between successive reaper eviction runs; a negative or infinite value disables the reaper. **Note**: value **0** would make the reaper run nonstop, which can be inefficient and CPU-consuming. |
 | `fairness`                    | [`Fairness`]   | `Fairness.Fifo`  | Fairness policy for acquiring permits from the global semaphore.                                                                                                                                         |
 | `idleTimeAllowedInPool`       | `Duration`     | 30 seconds       | How long an idle resource is allowed to remain in the pool before the reaper considers it for eviction.                                                                                                  |
+| `maxLifetime`                 | `Duration`     | `Duration.Inf`   | Maximum resource age since creation completes. Expired resources are discarded on checkout; resources in use finish normally. Non-positive values disable reuse. |
 | `maxIdle`                     | `Int`          | 100              | Cap on the idle resources tracked across all keys.                                                                                                                                                       |
 | `maxPerKey`                   | `A => Int`     | 100              | Maximum number of idle resources kept per key `A`. **Note**: it only limits idle resources per key; it does not limit how many resources can be checked out concurrently.                                |
 | `maxTotal`                    | `Int`          | 100              | Global limit on the resources checked out at the same time across all keys; idle ones do not count, so up to `maxTotal + maxIdle` can exist.                                                             |
+
+`withMaxLifetime` works even when the reaper is disabled. Reusing a resource does not reset its age.
 
 The builder also allows to configure the following lifecycle callbacks.
 
