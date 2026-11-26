@@ -356,13 +356,11 @@ object KeyPool {
     def allocateNew: F[PooledResource[F, B]] =
       kp.kpMetrics.createDuration
         .surround(
-          kp.kpRes(k)
-            .flatMap { value =>
-              Resource.eval(Clock[F].monotonic).map(createdAt => (value, createdAt))
-            }
-            .allocatedCase
+          for {
+            valueDestroy <- kp.kpRes(k).allocatedCase
+            createdAt <- Clock[F].monotonic
+          } yield PooledResource(valueDestroy._1, valueDestroy._2, createdAt)
         )
-        .map { case ((value, createdAt), destroy) => PooledResource(value, destroy, createdAt) }
 
     def acquire(poll: Poll[F]): F[(Boolean, PooledResource[F, B])] =
       kp.kpVar.modify(go).flatMap {
