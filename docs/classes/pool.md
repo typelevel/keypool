@@ -24,8 +24,11 @@ The table below enumerates all the available configuration parameters.
 | `durationBetweenEvictionRuns` | `Duration`     | 5 seconds        | Interval between successive reaper eviction runs; a negative or infinite value disables the reaper. **Note**: value **0** would make the reaper run nonstop, which can be inefficient and CPU-consuming. |
 | `fairness`                    | [`Fairness`]   | `Fairness.Fifo`  | Fairness policy for acquiring permits from the global semaphore.                                                                                                                                         |
 | `idleTimeAllowedInPool`       | `Duration`     | 30 seconds       | How long an idle resource is allowed to remain in the pool before the reaper considers it for eviction.                                                                                                  |
+| `maxLifetime`                 | `Duration`     | `Duration.Inf`   | Maximum resource age since creation completes. Expired resources are discarded on checkout; resources in use finish normally. Non-positive values disable reuse. |
 | `maxIdle`                     | `Int`          | 100              | Cap on the idle resources.                                                                                                                                                                               |
 | `maxTotal`                    | `Int`          | 100              | Limit on the resources checked out at the same time; idle ones are reused first, so the pool never holds more than this.                                                                                 |
+
+`withMaxLifetime` works even when the reaper is disabled. Reusing a resource does not reset its age.
 
 The builder also allows to configure the following lifecycle callbacks.
 

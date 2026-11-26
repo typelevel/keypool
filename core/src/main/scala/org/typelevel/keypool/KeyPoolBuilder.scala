@@ -27,7 +27,6 @@ import cats.syntax.all._
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.spawn._
 import scala.concurrent.duration._
-import cats.effect.kernel.Resource.ExitCase
 import org.typelevel.keypool.internal._
 
 @deprecated("use KeyPool.Builder", "0.4.7")
@@ -91,8 +90,8 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
     for {
       kpMetrics <- Resource.pure(Metrics.noop)
       kpVar <- Resource.makeCase(
-        Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](
-          PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
+        Ref[F].of[PoolMap[A, KeyPool.PooledResource[F, B]]](
+          PoolMap.open(0, Map.empty[A, PoolList[KeyPool.PooledResource[F, B]]])
         )
       )((kpVar, exit) => KeyPool.destroy(kpVar, exit, kpMetrics))
       kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](Fairness.Fifo, kpMaxTotal))
@@ -114,7 +113,8 @@ final class KeyPoolBuilder[F[_]: Temporal, A, B] private (
       kpMaxTotal,
       kpMaxTotalSem,
       kpVar,
-      kpMetrics
+      kpMetrics,
+      Duration.Inf
     )
   }
 

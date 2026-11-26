@@ -335,6 +335,92 @@ class KeyPoolSpec extends CatsEffectSuite {
     }
   }
 
+  test("Maximum lifetime is not reset by reuse") {
+    TestControl.executeEmbed {
+      for {
+        destroyed <- IO.ref(0)
+        result <- KeyPool
+          .Builder((_: Unit) => Resource.make(IO.unit)(_ => destroyed.update(_ + 1)))
+          .withIdleTimeAllowedInPool(Duration.Inf)
+          .withMaxLifetime(5.seconds)
+          .withDurationBetweenEvictionRuns(Duration.Inf)
+          .withMaxTotal(1)
+          .build
+          .use { pool =>
+            for {
+              _ <- pool.take(()).use_
+              _ <- IO.sleep(4.seconds)
+              reused <- pool.take(()).use(m => IO.pure(m.isReused))
+              _ <- IO.sleep(1.second)
+              fresh <- pool.take(()).use(m => IO.pure(!m.isReused))
+              count <- destroyed.get
+            } yield (reused, fresh, count)
+          }
+      } yield assertEquals(result, (true, true, 1))
+    }
+  }
+
+  test("Maximum lifetime does not interrupt checked-out resources") {
+    TestControl.executeEmbed {
+      for {
+        destroyed <- IO.ref(0)
+        result <- KeyPool
+          .Builder((_: Unit) => Resource.make(IO.unit)(_ => destroyed.update(_ + 1)))
+          .withIdleTimeAllowedInPool(Duration.Inf)
+          .withMaxLifetime(5.seconds)
+          .withDurationBetweenEvictionRuns(1.second)
+          .build
+          .use { pool =>
+            for {
+              duringUse <- pool.take(()).use(_ => IO.sleep(6.seconds) >> destroyed.get)
+              afterUse <- destroyed.get
+              state <- pool.state
+              fresh <- pool.take(()).use(m => IO.pure(!m.isReused))
+              afterCheckout <- destroyed.get
+            } yield (duringUse, afterUse, state, fresh, afterCheckout)
+          }
+      } yield assertEquals(result, (0, 0, (1, Map(() -> 1)), true, 1))
+    }
+  }
+
+  test("Resources have no maximum lifetime by default") {
+    TestControl.executeEmbed {
+      KeyPool
+        .Builder((_: Unit) => Resource.unit[IO])
+        .withIdleTimeAllowedInPool(Duration.Inf)
+        .build
+        .use { pool =>
+          pool.take(()).use_ >> IO.sleep(1.day) >>
+            pool.take(()).use(m => IO(assert(m.isReused)))
+        }
+    }
+  }
+
+  test("Checkout skips multiple expired resources and releases each once") {
+    TestControl.executeEmbed {
+      for {
+        destroyed <- IO.ref(0)
+        result <- KeyPool
+          .Builder((_: Unit) => Resource.make(IO.unit)(_ => destroyed.update(_ + 1)))
+          .withMaxLifetime(5.seconds)
+          .withDurationBetweenEvictionRuns(Duration.Inf)
+          .build
+          .use { pool =>
+            for {
+              _ <- pool.take(()).replicateA(3).use_
+              _ <- IO.sleep(5.seconds)
+              fresh <- pool.take(()).use(m => IO.pure(!m.isReused))
+              count <- destroyed.get
+            } yield (fresh, count)
+          }
+        total <- destroyed.get
+      } yield {
+        assertEquals(result, (true, 3))
+        assertEquals(total, 4)
+      }
+    }
+  }
+
   private def reqAction(
       pool: KeyPool[IO, Int, Ref[IO, Int]],
       ref: Ref[IO, List[Int]],

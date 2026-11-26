@@ -68,6 +68,22 @@ trait KeyPool[F[_], A, B] {
 
 object KeyPool {
 
+  private[keypool] final case class PooledResource[F[_], B](
+      value: B,
+      destroy: ExitCase => F[Unit],
+      createdAt: FiniteDuration
+  )
+
+  private def lifetimeExpired(
+      now: FiniteDuration,
+      createdAt: FiniteDuration,
+      lifetime: Duration
+  ): Boolean =
+    lifetime match {
+      case finite: FiniteDuration => now - createdAt >= finite
+      case _ => false
+    }
+
   private[keypool] final class KeyPoolConcrete[F[_]: Temporal, A, B] private[keypool] (
       private[keypool] val kpRes: A => Resource[F, B],
       private[keypool] val kpDefaultReuseState: Reusable,
@@ -75,8 +91,9 @@ object KeyPool {
       private[keypool] val kpMaxIdle: Int,
       private[keypool] val kpMaxTotal: Int,
       private[keypool] val kpMaxTotalSem: RequestSemaphore[F],
-      private[keypool] val kpVar: Ref[F, PoolMap[A, (B, ExitCase => F[Unit])]],
-      private[keypool] val kpMetrics: Metrics[F]
+      private[keypool] val kpVar: Ref[F, PoolMap[A, PooledResource[F, B]]],
+      private[keypool] val kpMetrics: Metrics[F],
+      private[keypool] val kpMaxLifetime: Duration
   ) extends KeyPool[F, A, B] {
 
     def take(k: A): Resource[F, Managed[F, B]] =
@@ -123,12 +140,12 @@ object KeyPool {
    * Make a 'KeyPool' inactive and destroy all idle resources.
    */
   private[keypool] def destroy[F[_]: MonadThrow, A, B](
-      kpVar: Ref[F, PoolMap[A, (B, ExitCase => F[Unit])]],
+      kpVar: Ref[F, PoolMap[A, PooledResource[F, B]]],
       exit: ExitCase,
       metrics: Metrics[F]
   ): F[Unit] =
     for {
-      m <- kpVar.getAndSet(PoolMap.closed[A, (B, ExitCase => F[Unit])])
+      m <- kpVar.getAndSet(PoolMap.closed[A, PooledResource[F, B]])
       _ <- m match {
         case PoolClosed() => Applicative[F].unit
         case PoolOpen(_, m2) =>
@@ -137,7 +154,7 @@ object KeyPool {
               .traverse_ { case (_, r) =>
                 metrics.idleDec >>
                   metrics.resourceDestroyed(Metrics.DestructionReason.PoolClosed) >>
-                  r._2(exit).attempt.void
+                  r.destroy(exit).attempt.void
               }
           }
       }
@@ -150,7 +167,7 @@ object KeyPool {
   private[keypool] def reap[F[_], A, B](
       idleTimeAllowedInPoolNanos: FiniteDuration,
       durationBetweenEvictionRuns: FiniteDuration,
-      kpVar: Ref[F, PoolMap[A, (B, ExitCase => F[Unit])]],
+      kpVar: Ref[F, PoolMap[A, PooledResource[F, B]]],
       metrics: Metrics[F],
       onReaperException: Throwable => F[Unit]
   )(implicit F: Temporal[F]): F[Unit] = {
@@ -159,8 +176,8 @@ object KeyPool {
     def findStale(
         now: FiniteDuration,
         idleCount: Int,
-        m: Map[A, PoolList[(B, ExitCase => F[Unit])]]
-    ): (PoolMap[A, (B, ExitCase => F[Unit])], List[(A, (B, ExitCase => F[Unit]))]) = {
+        m: Map[A, PoolList[PooledResource[F, B]]]
+    ): (PoolMap[A, PooledResource[F, B]], List[(A, PooledResource[F, B])]) = {
       val isNotStale: FiniteDuration => Boolean =
         time =>
           time + idleTimeAllowedInPoolNanos >= now // Time value is alright inside the KeyPool in nanos.
@@ -172,23 +189,23 @@ object KeyPool {
       // (Map key (PoolList resource), [resource])
       @annotation.tailrec
       def findStale_(
-          toKeep: List[(A, PoolList[(B, ExitCase => F[Unit])])] => List[
-            (A, PoolList[(B, ExitCase => F[Unit])])
+          toKeep: List[(A, PoolList[PooledResource[F, B]])] => List[
+            (A, PoolList[PooledResource[F, B]])
           ],
-          toDestroy: List[(A, (B, ExitCase => F[Unit]))] => List[(A, (B, ExitCase => F[Unit]))],
-          l: List[(A, PoolList[(B, ExitCase => F[Unit])])]
-      ): (Map[A, PoolList[(B, ExitCase => F[Unit])]], List[(A, (B, ExitCase => F[Unit]))]) = {
+          toDestroy: List[(A, PooledResource[F, B])] => List[(A, PooledResource[F, B])],
+          l: List[(A, PoolList[PooledResource[F, B]])]
+      ): (Map[A, PoolList[PooledResource[F, B]]], List[(A, PooledResource[F, B])]) = {
         l match {
           case Nil => (toKeep(List.empty).toMap, toDestroy(List.empty))
           case (key, pList) :: rest =>
             // Can use span since we know everything will be ordered as the time is
             // when it is placed back into the pool.
             val (notStale, stale) = pList.toList.span(r => isNotStale(r._1))
-            val toDestroy_ : List[(A, (B, ExitCase => F[Unit]))] => List[
-              (A, (B, ExitCase => F[Unit]))
+            val toDestroy_ : List[(A, PooledResource[F, B])] => List[
+              (A, PooledResource[F, B])
             ] = l => toDestroy(stale.map(t => key -> t._2) ++ l)
-            val toKeep_ : List[(A, PoolList[(B, ExitCase => F[Unit])])] => List[
-              (A, PoolList[(B, ExitCase => F[Unit])])
+            val toKeep_ : List[(A, PoolList[PooledResource[F, B]])] => List[
+              (A, PoolList[PooledResource[F, B]])
             ] =
               l =>
                 PoolList.fromList(notStale) match {
@@ -223,7 +240,7 @@ object KeyPool {
                   .traverse_(r =>
                     metrics.idleDec >>
                       metrics.resourceDestroyed(Metrics.DestructionReason.IdleTimeout) >>
-                      r._2._2(ExitCase.Succeeded)
+                      r._2.destroy(ExitCase.Succeeded)
                   )
                   .attempt
                   .flatMap {
@@ -244,7 +261,7 @@ object KeyPool {
   }
 
   private[keypool] def state[F[_]: Functor, A, B](
-      kpVar: Ref[F, PoolMap[A, (B, ExitCase => F[Unit])]]
+      kpVar: Ref[F, PoolMap[A, PooledResource[F, B]]]
   ): F[(Int, Map[A, Int])] =
     kpVar.get.map {
       case PoolClosed() =>
@@ -263,11 +280,10 @@ object KeyPool {
   private[keypool] def put[F[_]: Temporal, A, B](
       kp: KeyPoolConcrete[F, A, B],
       k: A,
-      r: B,
-      destroy: ExitCase => F[Unit]
+      r: PooledResource[F, B]
   ): ExitCase => F[Unit] = {
     def destroyFor(reason: Metrics.DestructionReason)(ec: ExitCase): F[Unit] =
-      kp.kpMetrics.resourceDestroyed(reason) >> destroy(ec)
+      kp.kpMetrics.resourceDestroyed(reason) >> r.destroy(ec)
     def addToList[Z](
         now: FiniteDuration,
         maxCount: Int,
@@ -286,8 +302,8 @@ object KeyPool {
 
     def go(
         now: FiniteDuration,
-        pc: PoolMap[A, (B, ExitCase => F[Unit])]
-    ): (PoolMap[A, (B, ExitCase => F[Unit])], ExitCase => F[Unit]) =
+        pc: PoolMap[A, PooledResource[F, B]]
+    ): (PoolMap[A, PooledResource[F, B]], ExitCase => F[Unit]) =
       pc match {
         case p @ PoolClosed() => (p, destroyFor(Metrics.DestructionReason.PoolClosed))
         case p @ PoolOpen(idleCount, m) =>
@@ -297,10 +313,10 @@ object KeyPool {
             m.get(k) match {
               case None =>
                 val cnt_ = idleCount + 1
-                val m_ = PoolMap.open(cnt_, m + (k -> One((r, destroy), now)))
+                val m_ = PoolMap.open(cnt_, m + (k -> One(r, now)))
                 (m_, Function.const[F[Unit], ExitCase](kp.kpMetrics.idleInc))
               case Some(l) =>
-                val (l_, mx) = addToList(now, kp.kpMaxPerKey(k), (r, destroy), l)
+                val (l_, mx) = addToList(now, kp.kpMaxPerKey(k), r, l)
                 val cnt_ = idleCount + mx.fold(1)(_ => 0)
                 val m_ = PoolMap.open(cnt_, m + (k -> l_))
                 (
@@ -323,8 +339,8 @@ object KeyPool {
       k: A
   ): Resource[F, Managed[F, B]] = {
     def go(
-        pm: PoolMap[A, (B, ExitCase => F[Unit])]
-    ): (PoolMap[A, (B, ExitCase => F[Unit])], Option[(B, ExitCase => F[Unit])]) =
+        pm: PoolMap[A, PooledResource[F, B]]
+    ): (PoolMap[A, PooledResource[F, B]], Option[PooledResource[F, B]]) =
       pm match {
         case p @ PoolClosed() => (p, None)
         case pOrig @ PoolOpen(idleCount, m) =>
@@ -337,36 +353,50 @@ object KeyPool {
           }
       }
 
-    def allocateNew: F[(B, ExitCase => F[Unit])] =
-      kp.kpMetrics.createDuration.surround(kp.kpRes(k).allocatedCase)
+    def allocateNew: F[PooledResource[F, B]] =
+      kp.kpMetrics.createDuration
+        .surround(
+          for {
+            valueDestroy <- kp.kpRes(k).allocatedCase
+            createdAt <- Clock[F].monotonic
+          } yield PooledResource(valueDestroy._1, valueDestroy._2, createdAt)
+        )
+
+    def acquire(poll: Poll[F]): F[(Boolean, PooledResource[F, B])] =
+      kp.kpVar.modify(go).flatMap {
+        case Some(r) =>
+          kp.kpMetrics.idleDec >> Clock[F].monotonic.flatMap { now =>
+            if (lifetimeExpired(now, r.createdAt, kp.kpMaxLifetime))
+              (kp.kpMetrics.resourceDestroyed(Metrics.DestructionReason.NotReusable) >>
+                r.destroy(ExitCase.Succeeded)).attempt.void >> acquire(poll)
+            else (true, r).pure[F]
+          }
+        case None => poll(allocateNew).map((false, _))
+      }
 
     for {
       acquisition <- kp.kpMetrics.acquire
       _ <- kp.kpMaxTotalSem.permit
       releasedState <- Resource.eval(Ref[F].of[Reusable](kp.kpDefaultReuseState))
-      taken <- Resource.makeCaseFull[F, (Boolean, (B, ExitCase => F[Unit]))] { poll =>
-        kp.kpVar.modify(go).flatMap {
-          case Some(r) => kp.kpMetrics.idleDec.as((true, r))
-          case None => poll(allocateNew).map((false, _))
-        }
-      } { case ((_, (b, destroy)), exitCase) =>
-        for {
-          reusable <- releasedState.get
-          out <- reusable match {
-            case Reusable.Reuse => put(kp, k, b, destroy).apply(exitCase).attempt.void
-            case Reusable.DontReuse =>
-              kp.kpMetrics.resourceDestroyed(
-                Metrics.DestructionReason.NotReusable
-              ) >> destroy(exitCase).attempt.void
-          }
-        } yield out
+      taken <- Resource.makeCaseFull[F, (Boolean, PooledResource[F, B])](acquire) {
+        case ((_, resource), exitCase) =>
+          for {
+            reusable <- releasedState.get
+            out <- reusable match {
+              case Reusable.Reuse => put(kp, k, resource).apply(exitCase).attempt.void
+              case Reusable.DontReuse =>
+                kp.kpMetrics.resourceDestroyed(
+                  Metrics.DestructionReason.NotReusable
+                ) >> resource.destroy(exitCase).attempt.void
+            }
+          } yield out
       }
       _ <- Resource.eval(acquisition.complete)
       _ <- kp.kpMetrics.inUseCount
       _ <- kp.kpMetrics.useDuration
     } yield {
-      val (reused, (b, _)) = taken
-      new Managed(b, reused, releasedState)
+      val (reused, resource) = taken
+      new Managed(resource.value, reused, releasedState)
     }
   }
 
@@ -374,6 +404,7 @@ object KeyPool {
       val kpRes: A => Resource[F, B],
       val kpDefaultReuseState: Reusable,
       val idleTimeAllowedInPool: Duration,
+      val maxLifetime: Duration,
       val durationBetweenEvictionRuns: Duration,
       val kpMaxPerKey: A => Int,
       val kpMaxIdle: Int,
@@ -386,6 +417,7 @@ object KeyPool {
         kpRes: A => Resource[F, B] = this.kpRes,
         kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
         idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
+        maxLifetime: Duration = this.maxLifetime,
         durationBetweenEvictionRuns: Duration = this.durationBetweenEvictionRuns,
         kpMaxPerKey: A => Int = this.kpMaxPerKey,
         kpMaxIdle: Int = this.kpMaxIdle,
@@ -397,6 +429,7 @@ object KeyPool {
       kpRes,
       kpDefaultReuseState,
       idleTimeAllowedInPool,
+      maxLifetime,
       durationBetweenEvictionRuns,
       kpMaxPerKey,
       kpMaxIdle,
@@ -451,6 +484,17 @@ object KeyPool {
      */
     def withIdleTimeAllowedInPool(duration: Duration): Builder[F, A, B] =
       copy(idleTimeAllowedInPool = duration)
+
+    /**
+     * Set the maximum age of a resource, measured from completion of its creation. Expired
+     * resources are discarded when taken from the pool. Resources already in use are allowed to
+     * finish. If not configured, resources have no maximum lifetime.
+     *
+     * @param duration
+     *   maximum resource age, or `Duration.Inf` for no limit. Non-positive durations disable reuse.
+     */
+    def withMaxLifetime(duration: Duration): Builder[F, A, B] =
+      copy(maxLifetime = duration)
 
     /**
      * Set the interval between eviction runs of the pool reaper. If not configured, the builder
@@ -528,8 +572,8 @@ object KeyPool {
       for {
         kpMetrics <- Resource.eval(metricsProvider.get)
         kpVar <- Resource.makeCase(
-          Ref[F].of[PoolMap[A, (B, ExitCase => F[Unit])]](
-            PoolMap.open(0, Map.empty[A, PoolList[(B, ExitCase => F[Unit])]])
+          Ref[F].of[PoolMap[A, PooledResource[F, B]]](
+            PoolMap.open(0, Map.empty[A, PoolList[PooledResource[F, B]]])
           )
         )((kpVar, exit) => KeyPool.destroy(kpVar, exit, kpMetrics))
         kpMaxTotalSem <- Resource.eval(RequestSemaphore[F](fairness, kpMaxTotal))
@@ -550,7 +594,8 @@ object KeyPool {
         kpMaxTotal,
         kpMaxTotalSem,
         kpVar,
-        kpMetrics
+        kpMetrics,
+        maxLifetime
       )
     }
 
@@ -568,6 +613,7 @@ object KeyPool {
       res,
       Defaults.defaultReuseState,
       Defaults.idleTimeAllowedInPool,
+      Defaults.maxLifetime,
       Defaults.durationBetweenEvictionRuns,
       Defaults.maxPerKey,
       Defaults.maxIdle,
@@ -590,6 +636,7 @@ object KeyPool {
     private object Defaults {
       val defaultReuseState = Reusable.Reuse
       val idleTimeAllowedInPool = 30.seconds
+      val maxLifetime: Duration = Duration.Inf
       val durationBetweenEvictionRuns = 5.seconds
       def maxPerKey[K](k: K): Int = Function.const(100)(k)
       val maxIdle = 100

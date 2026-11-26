@@ -80,6 +80,7 @@ object Pool {
       val kpRes: Resource[F, B],
       val kpDefaultReuseState: Reusable,
       val idleTimeAllowedInPool: Duration,
+      val maxLifetime: Duration,
       val durationBetweenEvictionRuns: Duration,
       val kpMaxIdle: Int,
       val kpMaxTotal: Int,
@@ -91,6 +92,7 @@ object Pool {
         kpRes: Resource[F, B] = this.kpRes,
         kpDefaultReuseState: Reusable = this.kpDefaultReuseState,
         idleTimeAllowedInPool: Duration = this.idleTimeAllowedInPool,
+        maxLifetime: Duration = this.maxLifetime,
         durationBetweenEvictionRuns: Duration = this.durationBetweenEvictionRuns,
         kpMaxIdle: Int = this.kpMaxIdle,
         kpMaxTotal: Int = this.kpMaxTotal,
@@ -101,6 +103,7 @@ object Pool {
       kpRes,
       kpDefaultReuseState,
       idleTimeAllowedInPool,
+      maxLifetime,
       durationBetweenEvictionRuns,
       kpMaxIdle,
       kpMaxTotal,
@@ -154,6 +157,17 @@ object Pool {
      */
     def withIdleTimeAllowedInPool(duration: Duration): Builder[F, B] =
       copy(idleTimeAllowedInPool = duration)
+
+    /**
+     * Set the maximum age of a resource, measured from completion of its creation. Expired
+     * resources are discarded when taken from the pool. Resources already in use are allowed to
+     * finish. If not configured, resources have no maximum lifetime.
+     *
+     * @param duration
+     *   maximum resource age, or `Duration.Inf` for no limit. Non-positive durations disable reuse.
+     */
+    def withMaxLifetime(duration: Duration): Builder[F, B] =
+      copy(maxLifetime = duration)
 
     /**
      * Set the interval between eviction runs of the pool reaper. If not configured, the builder
@@ -216,6 +230,7 @@ object Pool {
         kpRes = _ => kpRes,
         kpDefaultReuseState = kpDefaultReuseState,
         idleTimeAllowedInPool = idleTimeAllowedInPool,
+        maxLifetime = maxLifetime,
         durationBetweenEvictionRuns = durationBetweenEvictionRuns,
         kpMaxPerKey = _ => kpMaxTotal,
         kpMaxIdle = kpMaxIdle,
@@ -255,6 +270,7 @@ object Pool {
       res,
       Defaults.defaultReuseState,
       Defaults.idleTimeAllowedInPool,
+      Defaults.maxLifetime,
       Defaults.durationBetweenEvictionRuns,
       Defaults.maxIdle,
       Defaults.maxTotal,
@@ -276,6 +292,7 @@ object Pool {
     private object Defaults {
       val defaultReuseState = Reusable.Reuse
       val idleTimeAllowedInPool = 30.seconds
+      val maxLifetime: Duration = Duration.Inf
       val durationBetweenEvictionRuns = 5.seconds
       val maxIdle = 100
       val maxTotal = 100
